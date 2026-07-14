@@ -107,7 +107,7 @@ impl FileTreeNode {
         }
     }
 
-    pub(crate) fn handle_single_click(&mut self, buffers: &mut Buffers, logs: &mut Vec<Log>) {
+    pub(crate) fn handle_single_click(&mut self, buffers: &mut Buffers, logs: &mut Vec<Log>, virtual_inode_counter: &mut usize) {
         if self.is_dir {
             if self.expanded {
                 self.expanded = false;
@@ -115,7 +115,7 @@ impl FileTreeNode {
                 self.expand();
             }
         } else {
-            buffers.open_file_or_focus(self.path.clone(), logs);
+            buffers.open_file_or_focus(self.path.clone(), logs, virtual_inode_counter);
         }
     }
 
@@ -137,10 +137,10 @@ impl FileTreeNode {
         Some(parent)
     }
 
-    pub(crate) fn r00t_push_string(&mut self, ptr: &NodePointer, str: &mut String, buffers: &Buffers) -> usize {
+    pub(crate) fn r00t_push_string(&mut self, ptr: &NodePointer, str: &mut String, buffers: &Buffers, vic: &mut usize) -> usize {
         let mut coloring_start_x = 0;
         str.push(' '); coloring_start_x += 1;
-        str.push(match buffers.get_online_state(self.get_mut(ptr).unwrap().get_inode()) {
+        str.push(match buffers.get_online_state(self.get_mut(ptr).unwrap().get_inode(vic)) { // The pointer should be valid
             OnlineState::Nothing => ' ',
             OnlineState::Opened => FILE_LOADED,
             OnlineState::Modified => FILE_MODIFIED,
@@ -154,27 +154,27 @@ impl FileTreeNode {
                 } else {
                     str.push_str("│ ");
                 }
-                parent = parent.children.get(i).unwrap();
+                parent = parent.children.get(i).unwrap(); // The pointer should be valid
             }
-            if *ptr.inner.last().unwrap() + 1 == parent.children.len() {
+            if *ptr.inner.last().unwrap() + 1 == parent.children.len() { // We checked (ptr.inner.len() != 0)
                 str.push_str("└─");
             } else {
                 str.push_str("├─");
             }
         }
         coloring_start_x += 2 * ptr.inner.len();
-        let node = self.get(ptr).unwrap();
+        let node = self.get(ptr).unwrap(); // The pointer should be valid
         str.push_str(if node.is_dir { if node.expanded { "▼ " } else { "▶ " } } else { "  " });  coloring_start_x += 2;
         str.push_str(node.path.file_name().unwrap().to_str().unwrap());
         str.push('\n');
         coloring_start_x
     }
 
-    pub(crate) fn get_inode(&mut self) -> Inode {
+    pub(crate) fn get_inode(&mut self, vic: &mut usize) -> Inode {
         if let Some(inode) = self.inode {
             inode
         } else {
-            let inode = Buffers::get_inode(&self.path).unwrap();
+            let inode = Buffers::get_inode(&self.path).unwrap_or_else(|_| Inode::virtual_generator(vic));
             self.inode = Some(inode);
             inode
         }

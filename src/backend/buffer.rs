@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -25,7 +26,7 @@ pub(crate) struct Buffer {
 
 impl Buffer {
     pub(crate) fn new(path: PathBuf, logs: &mut Vec<Log>) -> Buffer {
-        let showing_filename = path.file_name().unwrap().to_str().unwrap().to_string();
+        let showing_filename = path.file_name().unwrap_or(OsStr::new(path.as_os_str())).to_str().unwrap().to_string();
         let (content, line_ending) = Content::from_file(&path, logs);
         Buffer {
             path,

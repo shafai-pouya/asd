@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_ERROR, C_INFO};
+use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_ERROR, C_INFO, C_TODO};
 use crate::backend::event_handler::{EventFlags, EventHandler};
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
@@ -129,8 +129,12 @@ impl SaveAsMode {
                          }
                          if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
                              KeyCode::Tab == e.code {
-                             todo!();
-                             // return false;
+                             app.logs.push(Log {
+                                 message: "Autocompletion is not implemented yet (todo)".to_string(),
+                                 color: C_TODO,
+                             });
+                             // todo!();
+                             return false;
                          }
                          return true;
                      },
@@ -297,9 +301,13 @@ impl SaveAsMode {
                     }
                 ],
                 vec![
-                    |_, _app, _e, _f| {
-                        todo!();
-                        // false
+                    |_, app, _e, _f| {
+                        // todo!();
+                        app.logs.push(Log {
+                            message: "Double clicking when saving as is not implemented yet (todo)".to_string(),
+                            color: C_TODO,
+                        });
+                        false
                     }
                 ]
             )

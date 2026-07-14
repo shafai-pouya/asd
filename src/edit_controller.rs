@@ -382,7 +382,7 @@ impl EditController for Buffer {
         let mut end_col = start_col;
 
         while start_col != 0 {
-            let char = self.content[line][start_col - 1..].chars().next().unwrap();
+            let char = self.content[line][start_col - 1..].chars().next().unwrap(); // start col is valid, non-zero, and we're using the prev char of it. So, unwrap is ok
             if char.is_alphanumeric() || char == '_' {
                 start_col -= 1;
             } else {
@@ -392,7 +392,7 @@ impl EditController for Buffer {
 
         let line_len = self.content[line].len();
         while end_col < line_len {
-            let char = self.content[line][end_col..].chars().next().unwrap();
+            let char = self.content[line][end_col..].chars().next().unwrap(); // end_col is less than line_len, so unwrap is ok
             if char.is_alphanumeric() || char == '_' {
                 end_col += 1;
             } else {

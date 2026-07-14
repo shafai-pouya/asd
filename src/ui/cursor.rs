@@ -23,9 +23,9 @@ impl TerminalCursor {
     pub(crate) fn render2(&self, terminal: &mut DefaultTerminal) {
         if self.render_cursor_showing {
             if self.cursor_showing {
-                terminal.show_cursor().unwrap();
+                terminal.show_cursor().unwrap(); // We can't do anything about it
             } else {
-                terminal.hide_cursor().unwrap();
+                terminal.hide_cursor().unwrap(); // We can't do anything about it
             }
         }
     }

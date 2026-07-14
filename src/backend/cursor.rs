@@ -85,7 +85,7 @@ impl Cursor {
             if let Some(ch) = content[self.line][self.col..].chars().next() {
                 let base_state = ch.is_variable_name();
                 while self.col < line_len {
-                    if content[self.line][self.col..].chars().next().unwrap().is_variable_name() == base_state {
+                    if content[self.line][self.col..].chars().next().unwrap().is_variable_name() == base_state { // Safety: self.col is less than line_len
                         self.col += 1;
                     } else {
                         break;
@@ -130,7 +130,7 @@ impl Cursor {
             if let Some(ch) = content[self.line][self.col - 1..].chars().next() {
                 let base_state = ch.is_variable_name();
                 while self.col > 0 {
-                    if content[self.line][self.col - 1..].chars().next().unwrap().is_variable_name() == base_state {
+                    if content[self.line][self.col - 1..].chars().next().unwrap().is_variable_name() == base_state { // Safe if you call op_no_virtual_spaces before
                         self.col -= 1;
                     } else {
                         break;

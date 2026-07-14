@@ -1,15 +1,3 @@
-///
-///
-/// Code structure:
-///     App::run:
-///         Runs the app, calls `App::draw` and `App::handle_events`
-///     App::handle_events:
-///         Calls `App::handle_mouse_event` or `App::handle_key_event`
-///
-///
-///
-///
-
 mod assets;
 mod ui;
 mod backend;
@@ -18,14 +6,13 @@ mod edit_controller;
 
 use crate::assets::colors::colors::{C_ERROR, C_HINT};
 use crate::backend::buffer::Buffer;
-use crate::backend::buffers::Buffers;
+use crate::backend::buffers::{Buffers, Inode};
 use crate::backend::file_tree::FileTree;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
 use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::log::Log;
-use color_eyre::Result;
 use crossterm::cursor::SetCursorStyle;
 use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event};
 use crossterm::execute;
@@ -70,6 +57,9 @@ pub struct App {
     /// If actives, The mode will change for the next loop
     change_mode: Option<Box<dyn Mode>>,
     next_is_separator_event: bool,
+
+
+    pub virtual_inode_counter: usize
 }
 
 pub const POLL_DURATION: Duration = Duration::from_millis(100);
@@ -78,7 +68,13 @@ impl App {
     #[inline]
     fn no_file() -> Self {
         // todo: change this function
-        todo!();
+        // todo!();
+        let _ = execute!(
+            std::io::stdout(),
+            DisableMouseCapture,
+        );
+        eprintln!("Use the following syntax:\n $ asd /path/to/file/or/dir");
+        std::process::exit(1);
         // Self::file("src/main.rs")
     }
 
@@ -86,17 +82,34 @@ impl App {
     fn file(path: &str) -> Self {
         let path = Path::new(path);
         let mut logs = vec![];
+        let mut vic = 0;
         let mut hm = HashMap::new();
-        let inode = Buffers::get_inode(&path).unwrap();
+        let inode = Buffers::get_inode(&path).unwrap_or_else(|e| {
+            logs.push(Log {
+                message: format!("Failed to get Inode: {e}"),
+                color: C_ERROR,
+            });
+            Inode::virtual_generator(&mut vic)
+        });
         hm.insert(inode, Buffer::new(PathBuf::from(path), &mut logs));
+        let is_dir = match path.metadata() {
+            Ok(meta) => meta.file_type().is_dir(),
+            Err(_) => false,
+        }; // Safety: We just got metadata in a few lines ago
+        let file_tree = if is_dir {
+            Some(FileTree::new(PathBuf::from(path)))
+        } else {
+            None
+        };
         Self {
             buffers: Buffers::new(
                 hm,
                 inode
             ),
+            virtual_inode_counter: vic,
             exit: false,
             next_is_separator_event: false,
-            file_tree: Some(FileTree::new(PathBuf::from(Path::new("/code/asd")))),
+            file_tree,
             terminal_cursor: TerminalCursor::new(),
             last_content_rect: Rect::default(),
             last_tree_rect: Rect::default(),
@@ -110,34 +123,31 @@ impl App {
 
 impl App {
     #[inline]
-    pub(crate) fn run(mut self, terminal: &mut DefaultTerminal, mode: &mut Box<dyn Mode>) -> Result<()> {
+    pub(crate) fn run(mut self, terminal: &mut DefaultTerminal, mode: &mut Box<dyn Mode>) {
         while !self.exit {
-            self.draw(terminal, mode)?;
-            self.handle_events(mode)?;
+            self.draw(terminal, mode);
+            self.handle_events(mode);
             self.handle_checkpoint_timers();
         }
-        Ok(())
     }
 
     #[inline]
-    pub(crate) fn draw(&mut self, terminal: &mut DefaultTerminal, mode: &mut Box<dyn Mode>) -> Result<()> {
+    pub(crate) fn draw(&mut self, terminal: &mut DefaultTerminal, mode: &mut Box<dyn Mode>) {
         terminal.draw(|frame| {
             self.render(frame, mode);
-        })?;
+        }).unwrap();  // I can't do anything. I let it crash
         self.terminal_cursor.render2(terminal);
-        Ok(())
     }
 
     #[inline]
-    fn handle_events(&mut self, mode: &mut Box<dyn Mode>) -> Result<()> {
-        if event::poll(POLL_DURATION)? {
-            self.handle_event(mode, event::read()?)?;
+    fn handle_events(&mut self, mode: &mut Box<dyn Mode>) {
+        if event::poll(POLL_DURATION).unwrap() {  // I can't do anything. I let it crash
+            self.handle_event(mode, event::read().unwrap()); // I can't do anything. I let it crash
         }
-        Ok(())
     }
 
     #[inline]
-    fn handle_event(&mut self, mode: &mut Box<dyn Mode>, event: Event) -> Result<()> {
+    fn handle_event(&mut self, mode: &mut Box<dyn Mode>, event: Event) {
         match event {
             Event::Mouse(me)
             if self.next_is_separator_event ||
@@ -148,7 +158,7 @@ impl App {
             }
             Event::Mouse(me) if self.last_tree_rect.contains(Position::new(me.column, me.row)) => {
                 self.file_tree.as_mut().unwrap().handle_event(
-                    me, &mut self.buffers, &mut self.logs, self.last_tree_rect
+                    me, &mut self.buffers, &mut self.logs, self.last_tree_rect, &mut self.virtual_inode_counter
                 ) // Safety: last_tree_rect should be empty when file tree isn't present
             }
             _ => {
@@ -158,7 +168,6 @@ impl App {
                 }
             }
         }
-        Ok(())
     }
 
     #[inline]
@@ -199,7 +208,7 @@ impl App {
             .stdin(Stdio::piped())
             .spawn() {
             Ok(mut clip_command) => {
-                let mut stdin = clip_command.stdin.take().unwrap();
+                let mut stdin = clip_command.stdin.take().unwrap(); // Safety: stdin is piped
                 match stdin.write_all(data) {
                     Ok(_) => {}
                     Err(e) => {
@@ -276,7 +285,7 @@ impl App {
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
 
     // The code in the following unsafe block only wrote because of some editor problems when
     // rendering tui and handling events. So, it opens the editor on another terminal
@@ -285,7 +294,8 @@ fn main() -> Result<()> {
         let file = OpenOptions::new()
            .read(true)
            .write(true)
-           .open("/dev/pts/1")?;
+           .open("/dev/pts/1")
+            .unwrap();
 
 
         libc::dup2(file.as_raw_fd(), 0); // stdin
@@ -322,7 +332,7 @@ fn main() -> Result<()> {
 
 
     // error handling
-    color_eyre::install()?;
+    color_eyre::install().unwrap(); // You can panic here
     let old_hook = std::panic::take_hook();
 
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -336,25 +346,22 @@ fn main() -> Result<()> {
 
     // init
     let mut terminal = ratatui::init();
-    enable_raw_mode()?;
+    enable_raw_mode().unwrap(); // you can panic here
     execute!(
         std::io::stdout(),
         EnterAlternateScreen,
         EnableMouseCapture,
-    )?;
-    execute!(std::io::stdout(), SetCursorStyle::BlinkingUnderScore).unwrap();
+        SetCursorStyle::BlinkingUnderScore,
+    ).unwrap(); // Usually ok, but you can panic here
 
     // app
     let mut mode = Box::new(EditorMode::new()) as Box<dyn Mode>;
-    let app_result = app.run(&mut terminal, &mut mode);
+    app.run(&mut terminal, &mut mode);
 
     // end
     execute!(
         std::io::stdout(),
         DisableMouseCapture,
-    )?;
+    ).unwrap(); // Usually ok, but you can panic here;
     ratatui::restore();
-
-
-    app_result
 }

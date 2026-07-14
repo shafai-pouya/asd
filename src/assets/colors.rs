@@ -24,4 +24,5 @@ pub mod colors {
     pub static C_TREE_FG_DIR: Color = Color::LightGreen;
     pub static C_MENU_FG: Color = Color::Black;
     pub static C_MENU_BG: Color = Color::LightRed;
+    pub static C_TODO: Color = Color::Rgb(139, 179, 61);
 }

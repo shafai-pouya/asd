@@ -74,7 +74,7 @@ impl Content {
                 });
                 content = String::new();
                 {
-                    let parent = CString::new(path.parent().unwrap().to_str().unwrap().to_string().as_bytes()).unwrap();
+                    let parent = CString::new(path.parent().unwrap().to_str().unwrap().to_string().as_bytes()).unwrap(); // Shouldn't fail I think
                     let result = unsafe { access(parent.as_ptr(), W_OK | X_OK) };
                     drop(parent);
                     if result != 0 {
@@ -89,6 +89,19 @@ impl Content {
                 match fs::read_to_string(path) {
                     Ok(c) => {
                         content = c;
+                        match File::options().append(true).open(path) {
+                            Ok(f) => drop(f),
+                            Err(e) => {
+                                logs.push(Log {
+                                    message: format!("[E:{}] Error Opening File for in append mode: {}", e.kind() as u32, e.kind().to_string()),
+                                    color: C_ERROR,
+                                });
+                                logs.push(Log {
+                                    message: "[I] It means the file is readonly!".to_string(),
+                                    color: C_INFO,
+                                });
+                            }
+                        }
                     },
                     Err(e) => {
                         logs.push(Log {
@@ -96,19 +109,6 @@ impl Content {
                             color: C_ERROR,
                         });
                         content = String::new();
-                    }
-                }
-                match File::options().append(true).open(path) {
-                    Ok(f) => drop(f),
-                    Err(e) => {
-                        logs.push(Log {
-                            message: format!("[E:{}] Error Opening File for in append mode: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_ERROR,
-                        });
-                        logs.push(Log {
-                            message: "[I] It means the file is readonly!".to_string(),
-                            color: C_INFO,
-                        });
                     }
                 }
             }
@@ -129,7 +129,7 @@ impl Content {
                     line_ending.get_or_insert(LineEnding::CR);
                 }
             } else {
-                lines.last_mut().unwrap().push(ch);
+                lines.last_mut().unwrap().push(ch); // It's Ok
             }
         }
 
@@ -152,7 +152,7 @@ impl Content {
     }
     
     pub(crate) fn get_max_line_length(&self) -> usize {
-        self.lines.iter().map(|l| l.len()).max().unwrap()
+        self.lines.iter().map(|l| l.len()).max().unwrap() // Ok
     }
 
     pub(crate) fn replace_text(&mut self, checkpoints: &mut Checkpoints, carets: &mut CursorEditor, new_text: &MostlyOneVec<LittleString>) {
@@ -191,7 +191,7 @@ impl Content {
             if forward {
                 for ch in part.as_bytes() {
                     if skip > 0 { skip -= 1; } else {
-                        caret_ptr.removed_text.last_mut().unwrap().push(*ch as char);
+                        caret_ptr.removed_text.last_mut().unwrap().push(*ch as char); // It's Ok
                     }
                 }
             } else {
@@ -256,7 +256,7 @@ impl Content {
             (0, _) |
             (1, _) => {
                 let last_line = self.lines
-                    .drain(min.0 + 1..max.0 + 1).last().unwrap();
+                    .drain(min.0 + 1..max.0 + 1).last().unwrap(); // We checked the len in the match case
 
                 self.lines[min.0].truncate(min.1);
                 self.lines[min.0].push_str(new_text.get(0).map(LittleString::as_str).unwrap_or(""));
@@ -265,7 +265,7 @@ impl Content {
             (_, 0) |
             (_, 1) => {
                 let mut new_text = new_text.iter();
-                let first_new_line = new_text.next().unwrap();
+                let first_new_line = new_text.next().unwrap(); // We checked the length in the match case
                 self.lines.splice(
                     min.0+1..min.0+1,
                     new_text.map(LittleString::to_string_clone)
@@ -280,7 +280,7 @@ impl Content {
                 let last_line = self.lines.splice(
                     min.0 + 1..max.0 + 1,
                     new_text.iter().skip(1).map(LittleString::to_string_clone)
-                ).last().unwrap();
+                ).last().unwrap(); // We checked the len
                 self.lines[min.0].truncate(min.1);
                 self.lines[min.0].push_str(new_text[0].as_str());
                 self.lines[min.0 + new_text_lines_n - 1].push_str(&last_line[max.1..]);
@@ -337,14 +337,14 @@ impl Content {
                 + texts.iter().map(|t| t.len()).sum::<usize>()
             );
             let mut iter = texts.into_iter();
-            joined_text.push_str(&iter.next().unwrap());
+            joined_text.push_str(&iter.next().unwrap()); // There is at least one line
             for s in iter {
                 joined_text.push_str(str::from_utf8(line_ending.get()).unwrap());
                 joined_text.push_str(&s);
             }
             joined_text
         } else {
-            texts.into_iter().next().unwrap()
+            texts.into_iter().next().unwrap_or(String::new())
         }
     }
 

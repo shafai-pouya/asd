@@ -14,13 +14,14 @@ pub(crate) struct NodePointer {
 }
 
 impl NodePointer {
-    pub(crate) fn get_on_nth_line(&mut self, mut n: usize, tree: &FileTree) -> Result<(), usize> {
+    pub(crate) fn get_on_nth_line(mut n: usize, tree: &FileTree) -> Result<Self, usize> {
+        let mut self_ = Self::new();
         let start_n = n;
         loop {
             if n == 0 {
-                return Ok(())
+                return Ok(self_)
             } else {
-                match self.push_0(&tree.root) {
+                match self_.push_0(&tree.root) {
                     Ok(()) => {}
                     Err(()) => return Err(start_n - n),
                 };
@@ -67,15 +68,12 @@ impl FileTree {
         self_.root.expand();
         self_
     }
-    pub(crate) fn handle_event(&mut self, event: MouseEvent, buffers: &mut Buffers, logs: &mut Vec<Log>, last_tree_rect: Rect) {
-        // let MouseEventKind::Down(MouseButton::Left) = event.kind else { return; };
+    pub(crate) fn handle_event(&mut self, event: MouseEvent, buffers: &mut Buffers, logs: &mut Vec<Log>, last_tree_rect: Rect, vic: &mut usize) {
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {}
             MouseEventKind::ScrollDown => {
                 self.scrollbar_y += 5;
-                let mut ptr = NodePointer::new();
-                let lines_n = ptr.get_on_nth_line(usize::MAX, &self).unwrap_err();
-                // let lines_n = self.root.get_on_nth_line(usize::MAX, &mut ptr).unwrap_err();
+                let lines_n = NodePointer::get_on_nth_line(usize::MAX, &self).unwrap_err(); // Safety: There is no way it reaches usize::MAX
                 if lines_n + 10 < self.scrollbar_y + last_tree_rect.height as usize {
                     self.scrollbar_y = (lines_n + 10).saturating_sub(last_tree_rect.height as usize);
                 }
@@ -90,15 +88,11 @@ impl FileTree {
             }
         }
 
-        let mut pointer = NodePointer::new();
         let n = event.row as usize + self.scrollbar_y;
-        if pointer.get_on_nth_line(n, &self).is_err() { // todo: scrollbar
-            return;
-        }
+        let Ok(pointer) = NodePointer::get_on_nth_line(n, &self) else { return; }; 
 
-        let a = self.root.get_mut(&pointer).unwrap();
-        a.handle_single_click(buffers, logs);
-        // todo
+        let a = self.root.get_mut(&pointer).unwrap(); // Safety: The pointer is valid
+        a.handle_single_click(buffers, logs, vic);
     }
     pub(crate) fn handle_separator_event(&mut self, event: MouseEvent, next_is_separator: &mut bool) {
         match event.kind {
@@ -117,15 +111,14 @@ impl FileTree {
 
         self.width = event.column;
     }
-    pub(crate) fn get_all_texts_from_len(&mut self, start: usize, len: u16, buffers: &Buffers, buffer: &mut ratatui::buffer::Buffer) -> String {
-        let mut ptr = NodePointer::new();
+    pub(crate) fn get_all_texts_from_len(&mut self, start: usize, len: u16, buffers: &Buffers, buffer: &mut ratatui::buffer::Buffer, vic: &mut usize) -> String {
         let mut to_return = String::new();
-        if ptr.get_on_nth_line(start, &self).is_err() {
+        let Ok(mut ptr) = NodePointer::get_on_nth_line(start, &self) else { 
             return to_return;
-        }
+        };
         for displaying_row in 0..len {
-            let coloring_x = self.root.r00t_push_string(&ptr, &mut to_return, buffers) as u16;
-            let coloring_protocol = self.root.get(&ptr).unwrap().get_coloring_proto();
+            let coloring_x = self.root.r00t_push_string(&ptr, &mut to_return, buffers, vic) as u16;
+            let coloring_protocol = self.root.get(&ptr).unwrap().get_coloring_proto(); // Safety: The pointer is valid
             coloring_protocol.draw(Rect {
                 x: coloring_x,
                 y: displaying_row,

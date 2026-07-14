@@ -6,6 +6,7 @@ use crate::App;
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::Frame;
 use crate::backend::modes::menu_mode::MenuMode;
+use crate::edit_operators::EditOperators;
 
 pub struct EditorMode {
     handler: EventHandler<()>,
@@ -109,7 +110,7 @@ impl EditorMode {
 
                     /// Arrow keys
                     |_, app, e, f| {
-                        #[derive(Clone, Copy)]
+                        #[derive(Clone, Copy, Eq, PartialEq)]
                         enum Arrow {L, R, U, D, End, Home, PU, PD}
                         let arrow = match e.code {
                             KeyCode::Left => Arrow::L,
@@ -141,6 +142,10 @@ impl EditorMode {
                         if (f & EventFlags::M_ALT_SUPER) != EventFlags::M_NOTHING {
                             return true;
                         }
+                        
+                        if (f & EventFlags::M_CTRL) == EventFlags::M_CTRL && (arrow == Arrow::L || arrow == Arrow::R) {
+                            active_buffer.op_no_virtual_spaces();
+                        }
 
                         active_buffer.operate_arrow_begin(&mut app.logs);
                         for caret in active_buffer.carets.carets.iter_mut() {
@@ -163,8 +168,8 @@ impl EditorMode {
                                 (false, Arrow::Home) => pos.cursor.home(),
                                 (_, Arrow::PU) => pos.cursor.up(app.last_content_rect.height as usize, &active_buffer.content),
                                 (_, Arrow::PD) => pos.cursor.down(app.last_content_rect.height as usize, &active_buffer.content),
-                                (true, Arrow::L) => pos.cursor.prev_word(&active_buffer.content),
-                                (true, Arrow::R) => pos.cursor.next_word(&active_buffer.content),
+                                (true, Arrow::L) => { pos.cursor.prev_word(&active_buffer.content) },
+                                (true, Arrow::R) => { pos.cursor.next_word(&active_buffer.content) },
                                 (true, Arrow::End) => pos.cursor.ctrl_end(&active_buffer.content),
                                 (true, Arrow::Home) => pos.cursor.ctrl_home(),
                             }
