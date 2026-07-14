@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use crossterm::event::KeyEvent;
-use crate::App;
-use crate::assets::colors::colors::C_TODO;
+use crate::assets::colors::colors::C_LOG_TODO;
 use crate::backend::buffer::Buffer;
 use crate::backend::event_handler::EventFlags;
 use crate::backend::file_tree_node::OnlineState;
 use crate::ui::log::Log;
+use crate::App;
+use crossterm::event::KeyEvent;
+use std::collections::HashMap;
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum Inode {
@@ -88,7 +88,7 @@ impl Buffers {
             // todo!()
             app.logs.push(Log {
                 message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
-                color: C_TODO,
+                color: C_LOG_TODO,
             });
             return
         }

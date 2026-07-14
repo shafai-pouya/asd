@@ -1,4 +1,3 @@
-use crate::assets::colors::colors::{C_ERROR, C_INFO, C_WARNING};
 use crate::backend::caret::{Carets, CursorEditor};
 use crate::backend::checkpoint::checkpoints::{Checkpoints, DURATION_SMALL_TIMER};
 use crate::backend::cursor::Cursor;
@@ -13,6 +12,7 @@ use std::fs::File;
 use std::ops::{Index, Range};
 use std::path::Path;
 use std::time::Instant;
+use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub enum LineEnding {
@@ -63,14 +63,14 @@ impl Content {
             Err(e) => {
                 logs.push(Log {
                     message: format!("[E:{}] Error checking existence of the file: {}", e.kind() as u32, e.kind().to_string()),
-                    color: C_ERROR,
+                    color: C_LOG_ERROR,
                 });
                 content = String::new();
             }
             Ok(false) => {
                 logs.push(Log {
                     message: "[I] Created new file".to_string(), // todo: maybe couldn't
-                    color: C_INFO,
+                    color: C_LOG_INFO,
                 });
                 content = String::new();
                 {
@@ -80,7 +80,7 @@ impl Content {
                     if result != 0 {
                         logs.push(Log {
                             message: "[W] Warning: You will fail to save the file, I think...".to_string(), // todo: maybe couldn't
-                            color: C_WARNING,
+                            color: C_LOG_WARNING,
                         });
                     }
                 }
@@ -94,11 +94,11 @@ impl Content {
                             Err(e) => {
                                 logs.push(Log {
                                     message: format!("[E:{}] Error Opening File for in append mode: {}", e.kind() as u32, e.kind().to_string()),
-                                    color: C_ERROR,
+                                    color: C_LOG_ERROR,
                                 });
                                 logs.push(Log {
                                     message: "[I] It means the file is readonly!".to_string(),
-                                    color: C_INFO,
+                                    color: C_LOG_INFO,
                                 });
                             }
                         }
@@ -106,7 +106,7 @@ impl Content {
                     Err(e) => {
                         logs.push(Log {
                             message: format!("[E:{}] Error Opening File for the first time: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_ERROR,
+                            color: C_LOG_ERROR,
                         });
                         content = String::new();
                     }

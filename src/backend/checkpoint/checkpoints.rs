@@ -1,4 +1,3 @@
-use crate::assets::colors::colors::C_INFO;
 use crate::backend::caret::Carets;
 use crate::backend::checkpoint::checkpoint::{Checkpoint, SingleEdit};
 use crate::backend::checkpoint::checkpoint_line::CheckpointEdit;
@@ -10,6 +9,7 @@ use std::fs::File;
 #[cfg(debug_assertions)]
 use std::io::Write;
 use std::time::{Duration, Instant};
+use crate::assets::colors::colors::C_LOG_INFO;
 
 pub(crate) const N_MAX_CHECKPOINTS: usize = 1000;
 pub(crate) const N_DRAIN_CHECKPOINTS: usize = 100;
@@ -115,7 +115,7 @@ impl Checkpoints {
             self.cursor_lened = self.others.len();
             logs.push(Log {
                 message: "Removed some old checkpoints...".to_string(),
-                color: C_INFO,
+                color: C_LOG_INFO,
             });
         }
     }

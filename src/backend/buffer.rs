@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use crate::assets::colors::colors::{C_ERROR, C_INFO};
+use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO};
 use crate::backend::caret::Carets;
 use crate::backend::checkpoint::checkpoints::{Checkpoints, DURATION_BIG_TIMER};
 use crate::backend::content::{Content, LineEnding};
@@ -54,7 +54,7 @@ impl Buffer {
                             Err(e) => {
                                 logs.push(Log {
                                     message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
-                                    color: C_ERROR,
+                                    color: C_LOG_ERROR,
                                 });
                                 return;
                             }
@@ -66,7 +66,7 @@ impl Buffer {
                         Err(e) => {
                             logs.push(Log {
                                 message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
-                                color: C_ERROR,
+                                color: C_LOG_ERROR,
                             });
                             return;
                         }
@@ -83,7 +83,7 @@ impl Buffer {
             Err(e) => {
                 logs.push(Log {
                     message: format!("[E:{}] Error opening file to save: {}", e.kind() as u32, e.kind().to_string()),
-                    color: C_ERROR,
+                    color: C_LOG_ERROR,
                 });
             }
         }
@@ -106,7 +106,7 @@ impl Buffer {
         if self.modified {
             logs.push(Log {
                 message: "Buffer is modified, try save it first".to_string(),
-                color: C_INFO,
+                color: C_LOG_INFO,
             });
             Err(())
         } else {

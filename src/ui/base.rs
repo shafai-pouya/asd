@@ -1,4 +1,3 @@
-use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL};
 use crate::ui::bar::render_bar;
 use crate::ui::file::render_file;
 use crate::ui::log::{get_logs_height, render_logs};
@@ -8,6 +7,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
 use ratatui::Frame;
+use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL};
 
 pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool) {
     let rows = Layout::vertical([

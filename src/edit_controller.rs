@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::C_INFO;
+use crate::assets::colors::colors::C_LOG_INFO;
 use crate::backend::buffer::Buffer;
 use crate::backend::caret::{Caret, CursorEditor, Position};
 use crate::backend::content::whitespaces_in_the_start_of_the_line;
@@ -166,7 +166,7 @@ impl EditController for Buffer {
         if self.checkpoints.cursor_lened == 0 {
             logs.push(Log {
                 message: "[I] No more checkpoints available".to_string(),
-                color: C_INFO,
+                color: C_LOG_INFO,
             });
             return;
         }
@@ -210,7 +210,7 @@ impl EditController for Buffer {
         if self.checkpoints.cursor_lened == self.checkpoints.others.len() {
             logs.push(Log {
                 message: "[I] No more checkpoints available".to_string(),
-                color: C_INFO,
+                color: C_LOG_INFO,
             });
             return;
         }

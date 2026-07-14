@@ -1,4 +1,3 @@
-use crate::assets::colors::colors::{C_BG_CURSOR, C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR, C_FG_NORMAL, C_FG_WHITE};
 use crate::backend::caret::Carets;
 use crate::backend::content::Content;
 use crate::ui::cursor::TerminalCursor;
@@ -11,6 +10,7 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Paragraph, Widget};
 use std::cmp::Ordering;
+use crate::assets::colors::colors::{C_BG_CURSOR, C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR, C_FG_CURSOR_SELECTION, C_FG_LINE_NUMBERS, C_FG_SELECTION};
 
 pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect, buf: &mut Buffer, can_use_cursor: bool) -> Rect {
     // Layout split
@@ -22,7 +22,7 @@ pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect
 
     // Set bg/fg
     Block::default()
-        .fg(C_FG_WHITE)
+        .fg(C_FG_LINE_NUMBERS)
         .render(lines_area, buf);
 
     // Other logic
@@ -134,7 +134,7 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
                         let (x2, y1) = find_in_viewport_position(start.line, content[start.line].len(), content_area, scrollbar).unwrap_or_else(|a| a);
                         Block::new()
                             .bg(C_BG_SELECTION)
-                            .fg(C_FG_NORMAL)
+                            .fg(C_FG_SELECTION)
                             .render(Rect { x: x1, y: y1, width: x2 - x1, height: 1, }, buf);
 
                         for line in start.line + 1..end.line {
@@ -142,7 +142,7 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
                             let (x2, y1) = find_in_viewport_position(line, content[line].len(), content_area, scrollbar).unwrap_or_else(|a| a);
                             Block::new()
                                 .bg(C_BG_SELECTION)
-                                .fg(C_FG_NORMAL)
+                                .fg(C_FG_SELECTION)
                                 .render(Rect { x: x1, y: y1, width: x2 - x1, height: 1, }, buf);
                         }
 
@@ -150,7 +150,7 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
                         let (x2, y1) = find_in_viewport_position(end.line, end.col, content_area, scrollbar).unwrap_or_else(|a| a);
                         Block::new()
                             .bg(C_BG_SELECTION)
-                            .fg(C_FG_NORMAL)
+                            .fg(C_FG_SELECTION)
                             .render(Rect { x: x1, y: y1, width: x2-x1, height: 1, }, buf);
                     }
                     Ordering::Equal => {
@@ -158,7 +158,7 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
                         let (x2, y1) = find_in_viewport_position(start.line, end.col, content_area, scrollbar).unwrap_or_else(|a| a);
                         Block::new()
                             .bg(C_BG_SELECTION)
-                            .fg(C_FG_NORMAL)
+                            .fg(C_FG_SELECTION)
                             .render(Rect { x: x1, y: y1, width: x2.overflowing_sub(x1).0, height: 1, }, buf);
 
                     }
@@ -171,7 +171,7 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
                     //   }
                     Block::new()
                         .bg(C_BG_CURSOR_SELECTION)
-                        .fg(C_FG_NORMAL)
+                        .fg(C_FG_CURSOR_SELECTION)
                         .render(Rect { x, y, width: 1, height: 1, }, buf);
                 }
             }

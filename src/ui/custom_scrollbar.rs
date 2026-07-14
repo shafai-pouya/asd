@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::C_FG_WHITE;
+use crate::assets::colors::colors::C_FG_SCROLLBAR;
 use crate::backend::content::Content;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -66,7 +66,7 @@ impl CustomScrollbar {
         ];
 
         Line::from(spans)
-            .fg(C_FG_WHITE)
+            .fg(C_FG_SCROLLBAR)
             .render(file_scroll_area, buf);
     }
 

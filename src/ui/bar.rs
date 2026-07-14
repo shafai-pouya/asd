@@ -1,10 +1,10 @@
-use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL, C_FG_BAR};
 use crate::App;
 use chrono::Local;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
+use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL, C_FG_BAR};
 
 pub(crate) fn render_bar(app: &App, bar: Rect, under_bar: Rect, buf: &mut Buffer) {
     Block::default()

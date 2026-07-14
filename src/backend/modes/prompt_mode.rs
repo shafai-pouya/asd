@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_ERROR, C_INFO, C_TODO};
+use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR, C_LOG_INFO, C_LOG_TODO};
 use crate::backend::event_handler::{EventFlags, EventHandler};
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
@@ -44,11 +44,11 @@ impl Mode for SaveAsMode {
         }
         app.logs.push(Log {
             message: "Save to file:".to_string(),
-            color: C_INFO,
+            color: C_LOG_INFO,
         });
         app.logs.push(Log {
             message: self.data.filepath.clone(),
-            color: C_INFO,
+            color: C_LOG_INFO,
         });
 
 
@@ -67,6 +67,7 @@ impl Mode for SaveAsMode {
 
             Block::new()
                 .bg(C_BG_SELECTION)
+                .fg(C_FG_SELECTION)
                 .render(Rect {
                     x: min,
                     y: self.data.last_content_rect.height + 1,
@@ -76,6 +77,7 @@ impl Mode for SaveAsMode {
 
             Block::new()
                 .bg(C_BG_CURSOR_SELECTION)
+                .fg(C_FG_CURSOR_SELECTION)
                 .render(Rect {
                     x: sel,
                     y: self.data.last_content_rect.height + 1,
@@ -131,7 +133,7 @@ impl SaveAsMode {
                              KeyCode::Tab == e.code {
                              app.logs.push(Log {
                                  message: "Autocompletion is not implemented yet (todo)".to_string(),
-                                 color: C_TODO,
+                                 color: C_LOG_TODO,
                              });
                              // todo!();
                              return false;
@@ -162,7 +164,7 @@ impl SaveAsMode {
                                     if clip.contains('\n') {
                                         app.logs.push(Log {
                                             message: "There is enter in your pasting thingy".to_string(),
-                                            color: C_ERROR,
+                                            color: C_LOG_ERROR,
                                         });
                                         return false;
                                     }
@@ -305,7 +307,7 @@ impl SaveAsMode {
                         // todo!();
                         app.logs.push(Log {
                             message: "Double clicking when saving as is not implemented yet (todo)".to_string(),
-                            color: C_TODO,
+                            color: C_LOG_TODO,
                         });
                         false
                     }

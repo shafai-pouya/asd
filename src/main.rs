@@ -4,7 +4,7 @@ mod backend;
 mod edit_operators;
 mod edit_controller;
 
-use crate::assets::colors::colors::{C_ERROR, C_HINT};
+use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_HINT};
 use crate::backend::buffer::Buffer;
 use crate::backend::buffers::{Buffers, Inode};
 use crate::backend::file_tree::FileTree;
@@ -29,6 +29,7 @@ use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use crossterm::style::{ResetColor, SetForegroundColor};
 
 pub struct App {
     /// If actives, The application exits in the next loop
@@ -72,8 +73,13 @@ impl App {
         let _ = execute!(
             std::io::stdout(),
             DisableMouseCapture,
+            SetForegroundColor(crossterm::style::Color::Red),
         );
         eprintln!("Use the following syntax:\n $ asd /path/to/file/or/dir");
+        let _ = execute!(
+            std::io::stdout(),
+            ResetColor,
+        );
         std::process::exit(1);
         // Self::file("src/main.rs")
     }
@@ -87,7 +93,7 @@ impl App {
         let inode = Buffers::get_inode(&path).unwrap_or_else(|e| {
             logs.push(Log {
                 message: format!("Failed to get Inode: {e}"),
-                color: C_ERROR,
+                color: C_LOG_ERROR,
             });
             Inode::virtual_generator(&mut vic)
         });
@@ -214,7 +220,7 @@ impl App {
                     Err(e) => {
                         logs.push(Log {
                             message: format!("[E:{}] Error opening stdin of xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_ERROR,
+                            color: C_LOG_ERROR,
                         });
                         return;
                     }
@@ -225,7 +231,7 @@ impl App {
                     Err(e) => {
                         logs.push(Log {
                             message: format!("[E:{}] Error waiting for xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_ERROR,
+                            color: C_LOG_ERROR,
                         });
                     }
                 };
@@ -233,7 +239,7 @@ impl App {
             Err(e) => {
                 logs.push(Log {
                     message: format!("[E:{}] Error opening xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
-                    color: C_ERROR,
+                    color: C_LOG_ERROR,
                 });
             }
         }
@@ -253,7 +259,7 @@ impl App {
                 Err(e) => {
                     logs.push(Log {
                         message: format!("[E:{}] Error getting the clipboard: {}", e.kind() as u32, e.kind().to_string()),
-                        color: C_ERROR,
+                        color: C_LOG_ERROR,
                     });
                     return None;
                 }
@@ -273,11 +279,11 @@ impl App {
         }
         self.logs.push(Log {
             message: "[E:i1] Cannot exit: modified buffer exists".to_string(),
-            color: C_ERROR,
+            color: C_LOG_ERROR,
         });
         self.logs.push(Log {
             message: "[HINT] Use ctrl+alt+q if you sure you want to exit".to_string(),
-            color: C_HINT
+            color: C_LOG_HINT
         });
     }
     fn operate_force_quit(&mut self) {
