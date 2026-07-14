@@ -45,10 +45,12 @@ impl Mode for SaveAsMode {
         app.logs.push(Log {
             message: "Save to file:".to_string(),
             color: C_LOG_INFO,
+            handler: None,
         });
         app.logs.push(Log {
             message: self.data.filepath.clone(),
             color: C_LOG_INFO,
+            handler: None,
         });
 
 
@@ -134,6 +136,7 @@ impl SaveAsMode {
                              app.logs.push(Log {
                                  message: "Autocompletion is not implemented yet (todo)".to_string(),
                                  color: C_LOG_TODO,
+                                 handler: None,
                              });
                              // todo!();
                              return false;
@@ -165,6 +168,7 @@ impl SaveAsMode {
                                         app.logs.push(Log {
                                             message: "There is enter in your pasting thingy".to_string(),
                                             color: C_LOG_ERROR,
+                                            handler: None,
                                         });
                                         return false;
                                     }
@@ -308,6 +312,7 @@ impl SaveAsMode {
                         app.logs.push(Log {
                             message: "Double clicking when saving as is not implemented yet (todo)".to_string(),
                             color: C_LOG_TODO,
+                            handler: None,
                         });
                         false
                     }

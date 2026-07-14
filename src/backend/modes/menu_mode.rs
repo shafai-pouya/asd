@@ -4,7 +4,7 @@ use crate::backend::event_handler::{EventFlags, EventHandler};
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
 use crate::App;
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Text;
@@ -20,11 +20,11 @@ pub struct MenuMode {
 pub struct MenuCommand {
     text: Cow<'static, str>,
     shortcut_symbol: Cow<'static, str>,
-    handler: Option<(KeyCode, fn(&mut App, &KeyEvent, EventFlags))>,
+    handler: Option<(KeyCode, KeyModifiers, fn(&mut App, &KeyEvent, EventFlags))>,
 }
 
 impl MenuCommand {
-    fn new(text: Cow<'static, str>, shortcut_symbol: Cow<'static, str>, handler: Option<(KeyCode, fn(&mut App, &KeyEvent, EventFlags))>) -> Self {
+    fn new(text: Cow<'static, str>, shortcut_symbol: Cow<'static, str>, handler: Option<(KeyCode, KeyModifiers, fn(&mut App, &KeyEvent, EventFlags))>) -> Self {
         Self {
             text,
             shortcut_symbol,
@@ -91,8 +91,8 @@ impl MenuMode {
                     |a, app, e, f| {
                         app.change_mode = Some(Box::new(EditorMode::new()));
                         for c in a {
-                            if let Some((kc, handler)) = c.handler {
-                                if kc == e.code {
+                            if let Some((kc, m, handler)) = c.handler {
+                                if kc == e.code && m == e.modifiers {
                                     handler(app, e, f);
                                     return false;
                                 }
@@ -111,7 +111,14 @@ impl MenuMode {
     pub(crate) fn new_menu_basic() -> MenuMode {
         let mut commands = Vec::new();
         commands.push(MenuCommand::new("Close the menu".into(), "esc".into(), None, ));
-        commands.push(MenuCommand::new("Quit this buffer".into(), "q".into(), Some((KeyCode::Char('q'), Buffers::quit_current_evt))));
+        commands.push(MenuCommand::new("Quit this buffer".into(), "q".into(),
+                                       Some((KeyCode::Char('q'), KeyModifiers::NONE, Buffers::quit_current_evt))));
+        commands.push(MenuCommand::new("Force quit this buffer".into(), "q".into(),
+                                       Some((KeyCode::Char('Q'), KeyModifiers::SHIFT, Buffers::force_quit_current_evt))));
+        commands.push(MenuCommand::new("Open help".into(), "h".into(),
+                                       Some((KeyCode::Char('h'), KeyModifiers::NONE, Buffers::open_help_evt))));
+        // commands.push(MenuCommand::new("Open file".into(), "h".into(),
+        //                                Some((KeyCode::Char('o'), KeyModifiers::NONE, Buffers::open_help_evt))));
         Self::new(commands)
     }
 }

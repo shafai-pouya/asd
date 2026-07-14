@@ -1,14 +1,14 @@
-use std::ffi::OsStr;
-use std::fs::File;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::time::Instant;
 use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO};
 use crate::backend::caret::Carets;
 use crate::backend::checkpoint::checkpoints::{Checkpoints, DURATION_BIG_TIMER};
 use crate::backend::content::{Content, LineEnding};
 use crate::ui::custom_scrollbar::CustomScrollbar;
 use crate::ui::log::Log;
+use std::ffi::OsStr;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 pub(crate) struct Buffer {
     pub path: PathBuf,
@@ -41,6 +41,21 @@ impl Buffer {
             checkpoints: Checkpoints::new(),
         }
     }
+    pub(crate) fn new_custom(path: PathBuf, showing_filename: String, content: &str) -> Buffer {
+        let (content, line_ending) = Content::from_str(content);
+        Buffer {
+            path,
+            showing_filename,
+            carets: Carets::new(),
+            content,
+            scrollbar: CustomScrollbar::new(),
+            drag_start_pos: (0, 0),
+            tab_size: 4,
+            modified: false,
+            line_ending,
+            checkpoints: Checkpoints::new(),
+        }
+    }
 
     
     pub(crate) fn save(&mut self, file_path: Option<&Path>, logs: &mut Vec<Log>) {
@@ -55,6 +70,7 @@ impl Buffer {
                                 logs.push(Log {
                                     message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
                                     color: C_LOG_ERROR,
+                                    handler: None,
                                 });
                                 return;
                             }
@@ -67,6 +83,7 @@ impl Buffer {
                             logs.push(Log {
                                 message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
                                 color: C_LOG_ERROR,
+                                handler: None,
                             });
                             return;
                         }
@@ -78,12 +95,14 @@ impl Buffer {
                 logs.push(Log {
                     message: "[I:1] File Saved!".to_string(),
                     color: Default::default(),
+                    handler: None,
                 });
             }
             Err(e) => {
                 logs.push(Log {
                     message: format!("[E:{}] Error opening file to save: {}", e.kind() as u32, e.kind().to_string()),
                     color: C_LOG_ERROR,
+                    handler: None,
                 });
             }
         }
@@ -107,10 +126,15 @@ impl Buffer {
             logs.push(Log {
                 message: "Buffer is modified, try save it first".to_string(),
                 color: C_LOG_INFO,
+                handler: None,
             });
             Err(())
         } else {
             Ok(())
         }
+    }
+
+    pub(crate) fn force_quit(&mut self) {
+        // Nothing
     }
 }

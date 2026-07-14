@@ -6,8 +6,8 @@ use crate::backend::cursor::Cursor;
 use crate::backend::little_string::LittleString;
 use crate::backend::selection::Selection;
 use crate::edit_operators::EditOperators;
-use crate::ui::log::Log;
 use crate::movec;
+use crate::ui::log::Log;
 use ratatui::layout::Rect;
 
 /// This trait made to be implemented for only one struct. It made
@@ -167,6 +167,7 @@ impl EditController for Buffer {
             logs.push(Log {
                 message: "[I] No more checkpoints available".to_string(),
                 color: C_LOG_INFO,
+                handler: None,
             });
             return;
         }
@@ -211,6 +212,7 @@ impl EditController for Buffer {
             logs.push(Log {
                 message: "[I] No more checkpoints available".to_string(),
                 color: C_LOG_INFO,
+                handler: None,
             });
             return;
         }

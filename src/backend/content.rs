@@ -1,3 +1,4 @@
+use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
 use crate::backend::caret::{Carets, CursorEditor};
 use crate::backend::checkpoint::checkpoints::{Checkpoints, DURATION_SMALL_TIMER};
 use crate::backend::cursor::Cursor;
@@ -12,7 +13,6 @@ use std::fs::File;
 use std::ops::{Index, Range};
 use std::path::Path;
 use std::time::Instant;
-use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub enum LineEnding {
@@ -64,6 +64,7 @@ impl Content {
                 logs.push(Log {
                     message: format!("[E:{}] Error checking existence of the file: {}", e.kind() as u32, e.kind().to_string()),
                     color: C_LOG_ERROR,
+                    handler: None,
                 });
                 content = String::new();
             }
@@ -71,6 +72,7 @@ impl Content {
                 logs.push(Log {
                     message: "[I] Created new file".to_string(), // todo: maybe couldn't
                     color: C_LOG_INFO,
+                    handler: None,
                 });
                 content = String::new();
                 {
@@ -81,6 +83,7 @@ impl Content {
                         logs.push(Log {
                             message: "[W] Warning: You will fail to save the file, I think...".to_string(), // todo: maybe couldn't
                             color: C_LOG_WARNING,
+                            handler: None,
                         });
                     }
                 }
@@ -95,10 +98,12 @@ impl Content {
                                 logs.push(Log {
                                     message: format!("[E:{}] Error Opening File for in append mode: {}", e.kind() as u32, e.kind().to_string()),
                                     color: C_LOG_ERROR,
+                                    handler: None,
                                 });
                                 logs.push(Log {
                                     message: "[I] It means the file is readonly!".to_string(),
                                     color: C_LOG_INFO,
+                                    handler: None,
                                 });
                             }
                         }
@@ -107,12 +112,17 @@ impl Content {
                         logs.push(Log {
                             message: format!("[E:{}] Error Opening File for the first time: {}", e.kind() as u32, e.kind().to_string()),
                             color: C_LOG_ERROR,
+                            handler: None,
                         });
                         content = String::new();
                     }
                 }
             }
         }
+        Self::from_str(&content)
+    }
+    
+    pub(crate) fn from_str(content: &str) -> (Self, LineEnding) {
         let mut lines = vec![String::new()];
         let mut line_ending = None;
         let mut chars = content.chars().peekable().into_iter();

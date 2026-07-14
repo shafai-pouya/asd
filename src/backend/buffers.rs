@@ -3,7 +3,7 @@ use crate::backend::buffer::Buffer;
 use crate::backend::event_handler::EventFlags;
 use crate::backend::file_tree_node::OnlineState;
 use crate::ui::log::Log;
-use crate::App;
+use crate::{App, READ_ONLY_PATH};
 use crossterm::event::KeyEvent;
 use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
@@ -29,8 +29,30 @@ pub(crate) struct Buffers {
 
 impl Buffers {
     pub(crate) fn new(inner: HashMap<Inode, Buffer>, active_inode: Inode) -> Buffers {
-        Self { inner, active_inode}
+        Self { inner, active_inode }
     }
+
+    pub(crate) fn open_help(&mut self, vic: &mut usize) {
+        let inode = Inode::virtual_generator(vic);
+        self.insert(inode, Buffer::new_custom(
+            PathBuf::from(READ_ONLY_PATH),
+            "help.txt (READONLY)".to_string(),
+            include_str!("../assets/help.txt")
+        ));
+        self.active_inode = inode;
+    }
+
+    pub(crate) fn help(vic: &mut usize) -> Self {
+        let inode = Inode::virtual_generator(vic);
+        let mut hm = HashMap::new();
+        hm.insert(inode, Buffer::new_custom(
+            PathBuf::from(READ_ONLY_PATH),
+            "help.txt (READONLY)".to_string(),
+            include_str!("../assets/help.txt")
+        ));
+        Self { active_inode: inode, inner: hm }
+    }
+
 
     pub(crate) fn commit_all(&mut self, logs: &mut Vec<Log>) {
         for (_, buffer) in &mut self.inner {
@@ -89,10 +111,26 @@ impl Buffers {
             app.logs.push(Log {
                 message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
                 color: C_LOG_TODO,
+                handler: None,
             });
             return
         }
         app.buffers.remove_self(&mut app.logs);
+    }
+    pub(crate) fn force_quit_current_evt(app: &mut App, _: &KeyEvent, _: EventFlags) {
+        if app.buffers.inner.len() == 1 {
+            // todo!()
+            app.logs.push(Log {
+                message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
+                color: C_LOG_TODO,
+                handler: None,
+            });
+            return
+        }
+        app.buffers.force_remove_self();
+    }
+    pub(crate) fn open_help_evt(app: &mut App, _: &KeyEvent, _: EventFlags) {
+        app.buffers.open_help(&mut app.virtual_inode_counter)
     }
 }
 
@@ -104,6 +142,13 @@ impl Buffers {
             self.inner.remove(&self.active_inode);
             self.active_inode = *self.inner.iter().next().unwrap().0; // todo: remove unwrap
         }
+    }
+    pub(crate) fn force_remove_self(&mut self) {
+        let buffer = self.active_mut();
+        buffer.force_quit();
+        self.inner.remove(&self.active_inode);
+        self.active_inode = *self.inner.iter().next().unwrap().0; // todo: remove unwrap
+        
     }
 
     pub(crate) fn insert(&mut self, index: Inode, buffer: Buffer) {

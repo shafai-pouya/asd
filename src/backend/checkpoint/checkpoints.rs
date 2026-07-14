@@ -116,6 +116,7 @@ impl Checkpoints {
             logs.push(Log {
                 message: "Removed some old checkpoints...".to_string(),
                 color: C_LOG_INFO,
+                handler: None,
             });
         }
     }

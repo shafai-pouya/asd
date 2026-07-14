@@ -14,8 +14,9 @@ use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::log::Log;
 use crossterm::cursor::SetCursorStyle;
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event};
+use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind};
 use crossterm::execute;
+use crossterm::style::{ResetColor, SetForegroundColor};
 use crossterm::terminal::{enable_raw_mode, EnterAlternateScreen};
 use ratatui::layout::Position;
 use ratatui::{layout::Rect, DefaultTerminal, Frame};
@@ -29,7 +30,6 @@ use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use crossterm::style::{ResetColor, SetForegroundColor};
 
 pub struct App {
     /// If actives, The application exits in the next loop
@@ -65,6 +65,8 @@ pub struct App {
 
 pub const POLL_DURATION: Duration = Duration::from_millis(100);
 
+pub const READ_ONLY_PATH: &str = "/dev/full";
+
 impl App {
     #[inline]
     fn no_file() -> Self {
@@ -87,13 +89,24 @@ impl App {
     #[inline]
     fn file(path: &str) -> Self {
         let path = Path::new(path);
-        let mut logs = vec![];
+        let mut logs = vec![
+            Log {
+                message: "If you want help, click here".to_string(),
+                color: C_LOG_HINT,
+                handler: Some(|me, app| {
+                    if let MouseEventKind::Down(MouseButton::Left) = me.kind {
+                        app.buffers.open_help(&mut app.virtual_inode_counter);
+                    };
+                }),
+            }
+        ];
         let mut vic = 0;
         let mut hm = HashMap::new();
         let inode = Buffers::get_inode(&path).unwrap_or_else(|e| {
             logs.push(Log {
                 message: format!("Failed to get Inode: {e}"),
                 color: C_LOG_ERROR,
+                handler: None,
             });
             Inode::virtual_generator(&mut vic)
         });
@@ -116,6 +129,24 @@ impl App {
             exit: false,
             next_is_separator_event: false,
             file_tree,
+            terminal_cursor: TerminalCursor::new(),
+            last_content_rect: Rect::default(),
+            last_tree_rect: Rect::default(),
+            last_tree_and_content_separator_rect: Rect::default(),
+            double_click_details: (u16::MAX, u16::MAX, Instant::now()),
+            change_mode: None,
+            logs,
+        }
+    }
+    fn help() -> Self {
+        let logs = vec![];
+        let mut vic = 0;
+        Self {
+            buffers: Buffers::help(&mut vic),
+            virtual_inode_counter: vic,
+            exit: false,
+            next_is_separator_event: false,
+            file_tree: None,
             terminal_cursor: TerminalCursor::new(),
             last_content_rect: Rect::default(),
             last_tree_rect: Rect::default(),
@@ -155,6 +186,14 @@ impl App {
     #[inline]
     fn handle_event(&mut self, mode: &mut Box<dyn Mode>, event: Event) {
         match event {
+            Event::Mouse(me)
+                if me.row > self.last_content_rect.height + 1 - self.logs.len() as u16 &&
+                    self.logs.get(me.row as usize + self.logs.len() - 2 - self.last_content_rect.height as usize)
+                        .map(|l| l.handler.is_some()).unwrap_or(false)
+            => {
+                let handler = self.logs.get(me.row as usize + self.logs.len() - 2 - self.last_content_rect.height as usize).unwrap().handler.unwrap();
+                handler(me, self);
+            }
             Event::Mouse(me)
             if self.next_is_separator_event ||
                 self.last_tree_and_content_separator_rect.contains(Position::new(me.column, me.row)) => {
@@ -221,6 +260,7 @@ impl App {
                         logs.push(Log {
                             message: format!("[E:{}] Error opening stdin of xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
                             color: C_LOG_ERROR,
+                            handler: None,
                         });
                         return;
                     }
@@ -232,6 +272,7 @@ impl App {
                         logs.push(Log {
                             message: format!("[E:{}] Error waiting for xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
                             color: C_LOG_ERROR,
+                            handler: None,
                         });
                     }
                 };
@@ -240,6 +281,7 @@ impl App {
                 logs.push(Log {
                     message: format!("[E:{}] Error opening xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
                     color: C_LOG_ERROR,
+                    handler: None,
                 });
             }
         }
@@ -260,6 +302,7 @@ impl App {
                     logs.push(Log {
                         message: format!("[E:{}] Error getting the clipboard: {}", e.kind() as u32, e.kind().to_string()),
                         color: C_LOG_ERROR,
+                        handler: None,
                     });
                     return None;
                 }
@@ -280,10 +323,12 @@ impl App {
         self.logs.push(Log {
             message: "[E:i1] Cannot exit: modified buffer exists".to_string(),
             color: C_LOG_ERROR,
+            handler: None,
         });
         self.logs.push(Log {
             message: "[HINT] Use ctrl+alt+q if you sure you want to exit".to_string(),
-            color: C_LOG_HINT
+            color: C_LOG_HINT,
+            handler: None,
         });
     }
     fn operate_force_quit(&mut self) {
@@ -300,7 +345,7 @@ fn main() {
         let file = OpenOptions::new()
            .read(true)
            .write(true)
-           .open("/dev/pts/1")
+           .open("/dev/pts/5")
             .unwrap();
 
 
@@ -330,7 +375,11 @@ fn main() {
     let mut args = args().into_iter();
     args.next();
     let app = if let Some(arg) = args.next() {
-        App::file(&arg)
+        if arg == "--help" {
+            App::help()
+        } else {
+            App::file(&arg)
+        }
     } else {
         App::no_file()
     };
