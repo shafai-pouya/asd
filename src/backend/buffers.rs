@@ -1,9 +1,9 @@
 use crate::assets::colors::colors::C_LOG_TODO;
+use crate::assets::constants::READ_ONLY_PATH;
 use crate::backend::buffer::Buffer;
-use crate::backend::event_handler::EventFlags;
 use crate::backend::file_tree_node::OnlineState;
 use crate::ui::log::Log;
-use crate::{App, READ_ONLY_PATH};
+use crate::App;
 use crossterm::event::KeyEvent;
 use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
@@ -43,14 +43,9 @@ impl Buffers {
     }
 
     pub(crate) fn help(vic: &mut usize) -> Self {
-        let inode = Inode::virtual_generator(vic);
-        let mut hm = HashMap::new();
-        hm.insert(inode, Buffer::new_custom(
-            PathBuf::from(READ_ONLY_PATH),
-            "help.txt (READONLY)".to_string(),
-            include_str!("../assets/help.txt")
-        ));
-        Self { active_inode: inode, inner: hm }
+        let mut self_ = Self { inner: HashMap::new(), active_inode: Inode::virtual_generator(vic) };
+        self_.open_help(vic);
+        self_
     }
 
 
@@ -78,7 +73,7 @@ impl Buffers {
         });
         self.active_inode = inode;
         if !self.inner.contains_key(&inode) {
-            self.insert(inode, Buffer::new(path, logs));
+            self.insert(inode, Buffer::new_from_file(path, logs));
         }
     }
     
@@ -105,7 +100,7 @@ impl Buffers {
         &mut self.inner
     }
 
-    pub(crate) fn quit_current_evt(app: &mut App, _: &KeyEvent, _: EventFlags) {
+    pub(crate) fn quit_current_evt(app: &mut App, _: &KeyEvent) {
         if app.buffers.inner.len() == 1 {
             // todo!()
             app.logs.push(Log {
@@ -117,7 +112,7 @@ impl Buffers {
         }
         app.buffers.remove_self(&mut app.logs);
     }
-    pub(crate) fn force_quit_current_evt(app: &mut App, _: &KeyEvent, _: EventFlags) {
+    pub(crate) fn force_quit_current_evt(app: &mut App, _: &KeyEvent) {
         if app.buffers.inner.len() == 1 {
             // todo!()
             app.logs.push(Log {
@@ -129,7 +124,7 @@ impl Buffers {
         }
         app.buffers.force_remove_self();
     }
-    pub(crate) fn open_help_evt(app: &mut App, _: &KeyEvent, _: EventFlags) {
+    pub(crate) fn open_help_evt(app: &mut App, _: &KeyEvent) {
         app.buffers.open_help(&mut app.virtual_inode_counter)
     }
 }
@@ -144,8 +139,6 @@ impl Buffers {
         }
     }
     pub(crate) fn force_remove_self(&mut self) {
-        let buffer = self.active_mut();
-        buffer.force_quit();
         self.inner.remove(&self.active_inode);
         self.active_inode = *self.inner.iter().next().unwrap().0; // todo: remove unwrap
         

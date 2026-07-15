@@ -1,5 +1,7 @@
+use crate::assets::colors::colors::{C_BG_CURSOR, C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR, C_FG_CURSOR_SELECTION, C_FG_LINE_NUMBERS, C_FG_SELECTION};
 use crate::backend::caret::Carets;
 use crate::backend::content::Content;
+use crate::backend::display_string::DisplaySlice;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::custom_scrollbar::CustomScrollbar;
 use crate::App;
@@ -10,9 +12,8 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Paragraph, Widget};
 use std::cmp::Ordering;
-use crate::assets::colors::colors::{C_BG_CURSOR, C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR, C_FG_CURSOR_SELECTION, C_FG_LINE_NUMBERS, C_FG_SELECTION};
 
-pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect, buf: &mut Buffer, can_use_cursor: bool) -> Rect {
+pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect, buf: &mut Buffer, can_use_cursor: bool) -> (Rect, Vec<(u16, u16, u32)>) {
     // Layout split
     let layout = Layout::horizontal([
         Constraint::Length(6),
@@ -28,17 +29,22 @@ pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect
     // Other logic
     let active_buffer = app.buffers.active_mut();
     active_buffer.scrollbar.validate_position(&active_buffer.content, content_area);
+    
+    let mut emoji_queue = vec![];
 
     Paragraph::new(
         active_buffer.content.get(
             active_buffer.scrollbar.top_position..
                 (active_buffer.scrollbar.top_position+content_area.height as usize).min(active_buffer.content.len()))
-            .unwrap_or(&[]).iter()
-            .map(|a| Line::raw(
+            .unwrap_or(&[]).iter().enumerate()
+            .map(|(y, a)| Line::raw(
                 a.get(
                     active_buffer.scrollbar.position as usize..
                         ((active_buffer.scrollbar.position + content_area.width) as usize).min(a.len())
-                ).unwrap_or(""))).collect::<Vec<_>>()
+                )
+                    .map(|a| DisplaySlice::from_slice(a).to_string_to_show(content_area.x, y as u16, buf, &mut emoji_queue))
+                    .unwrap_or(String::new()))
+            ).collect::<Vec<_>>()
     )
         .render(content_area, buf);
 
@@ -67,13 +73,13 @@ pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect
         can_use_cursor
     );
 
-    content_area
+    (content_area, emoji_queue)
 }
 
 pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &CustomScrollbar, content_area: Rect, terminal_cursor: &mut TerminalCursor, buf: &mut Buffer, can_use_cursor: bool) {
     let len = cursors.carets.len();
-    if can_use_cursor && len == 1 && cursors.carets[0].get_position().selection.is_none() {
-        if let Ok((x, y)) = find_in_viewport_position(cursors.carets[0].get_position().cursor.line, cursors.carets[0].get_position().cursor.col, content_area, scrollbar) {
+    if can_use_cursor && len == 1 && cursors.carets[0].get_position().is_selection_none() {
+        if let Ok((x, y)) = find_in_viewport_position(cursors.carets[0].get_position().cursor().line, cursors.carets[0].get_position().cursor().col, content_area, scrollbar) {
             terminal_cursor.set_to((x, y));
         } else {
             terminal_cursor.hide();
@@ -84,10 +90,10 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
         }
         for cert in &cursors.carets {
             let pos = cert.get_position();
-            if pos.selection.is_none() {
+            if pos.selection().is_none() {
                 if let Ok((x, y)) = find_in_viewport_position(
-                    pos.cursor.line,
-                    pos.cursor.col,
+                    pos.cursor().line,
+                    pos.cursor().col,
                     content_area,
                     scrollbar,
                 ) {
@@ -110,8 +116,8 @@ pub(crate) fn render_cursor(cursors: &Carets, content: &Content, scrollbar: &Cus
                 struct LC { line: usize, col: usize }
                 let mut start;
                 let mut end;
-                let cursor = LC { line: pos.cursor.line, col: pos.cursor.col };
-                let selection = LC { line: pos.selection.line, col: pos.selection.col };
+                let cursor = LC { line: pos.cursor().line, col: pos.cursor().col };
+                let selection = LC { line: pos.selection().line, col: pos.selection().col };
                 if cursor >= selection {
                     start = selection;
                     end = cursor;

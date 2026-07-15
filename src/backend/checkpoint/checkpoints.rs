@@ -1,21 +1,13 @@
+use crate::assets::colors::colors::C_LOG_INFO;
+use crate::assets::constants::{N_DRAIN_CHECKPOINTS, N_MAX_CHECKPOINTS};
 use crate::backend::caret::Carets;
 use crate::backend::checkpoint::checkpoint::{Checkpoint, SingleEdit};
 use crate::backend::checkpoint::checkpoint_line::CheckpointEdit;
 use crate::backend::content::Content;
+use crate::backend::little_string::LittleString;
 use crate::movec;
 use crate::ui::log::Log;
-#[cfg(debug_assertions)]
-use std::fs::File;
-#[cfg(debug_assertions)]
-use std::io::Write;
-use std::time::{Duration, Instant};
-use crate::assets::colors::colors::C_LOG_INFO;
-
-pub(crate) const N_MAX_CHECKPOINTS: usize = 1000;
-pub(crate) const N_DRAIN_CHECKPOINTS: usize = 100;
-
-pub(crate) const DURATION_BIG_TIMER: Duration = Duration::from_secs(2);
-pub(crate) const DURATION_SMALL_TIMER: Duration = Duration::from_millis(500);
+use std::time::Instant;
 
 pub(crate) struct Checkpoints {
     pub others: Vec<Checkpoint>,
@@ -37,8 +29,8 @@ impl Checkpoints {
             Checkpoint {
                 inner: carets.carets.iter_mut()
                     .map(|caret| {
-                        let mut line = caret.get_position().cursor.line;
-                        let mut col = caret.get_position().cursor.col;
+                        let mut line = caret.get_position().cursor().get_line();
+                        let mut col = caret.get_position().cursor().get_col();
                         let mut result = movec!();
 
                         loop {
@@ -47,28 +39,18 @@ impl Checkpoints {
                             if caret.added_len <= available {
                                 let start = available - caret.added_len;
 
-                                let text = content[line]
-                                    .as_bytes()
-                                    .iter()
-                                    .skip(start)
-                                    .take(caret.added_len)
-                                    .map(|c| *c)
-                                    .collect();
+                                let text = &content[line][start..start + caret.added_len];
 
-                                result.insert(0, text);
+                                result.insert(0, LittleString::from_slice(text));
 
                                 col = start;
                                 caret.added_len = 0;
                                 break;
                             }
 
-                            let text = content[line].as_bytes()
-                                .iter()
-                                .take(available)
-                                .map(|c| *c)
-                                .collect();
+                            let text = &content[line][..available];
 
-                            result.insert(0, text);
+                            result.insert(0, LittleString::from_slice(text));
 
                             caret.added_len -= available;
 
@@ -94,10 +76,6 @@ impl Checkpoints {
                                 added_data: result,
                             },
                         };
-                        #[cfg(debug_assertions)]
-                        let mut f = File::options().write(true).open("/dev/tty3").unwrap();
-                        #[cfg(debug_assertions)]
-                        write!(f, "{:?}", edit).unwrap();
                         edit
                     })
                     .collect(),

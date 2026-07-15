@@ -5,9 +5,6 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use std::path::PathBuf;
 
-pub const FILE_MODIFIED: char = '●';
-pub const FILE_LOADED: char = '○';
-
 #[derive(Debug)]
 pub(crate) struct NodePointer {
     pub inner: Vec<usize>,

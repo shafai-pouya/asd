@@ -1,4 +1,8 @@
-use ratatui::{DefaultTerminal, Frame};
+use crate::backend::display_char::EMOJI_LIST;
+use crossterm::cursor::MoveTo;
+use crossterm::execute;
+use ratatui::DefaultTerminal;
+use std::io;
 
 pub struct TerminalCursor {
     pub x: u16,
@@ -14,9 +18,13 @@ impl TerminalCursor {
         self.show();
     }
 
-    pub(crate) fn render1(&mut self, frame: &mut Frame) {
+    pub(crate) fn render1(&mut self) {
         if self.cursor_showing {
-            frame.set_cursor_position((self.x, self.y));
+            execute!(
+                io::stdout(),
+                MoveTo(self.x, self.y)
+            )
+                .unwrap(); // todo: remove unwrap
         }
     }
 
@@ -50,6 +58,18 @@ impl TerminalCursor {
         if !self.cursor_showing {
             self.cursor_showing = true;
             self.render_cursor_showing = true;
+        }
+    }
+
+    pub(crate) fn render_emoji_queue(&mut self, emoji_queue: Vec<(u16, u16, u32)>) {
+        for (x, y, emoji) in emoji_queue {
+            execute!(
+                io::stdout(),
+                MoveTo(x, y),
+            ).unwrap(); // todo: I don't think it will fail. Maybe: remove unwrap
+            let lock = EMOJI_LIST.lock().unwrap();
+            let str: &str = lock.get(emoji as usize & 0x3FFF_FFFF).unwrap();
+            print!("{}", str);
         }
     }
 }

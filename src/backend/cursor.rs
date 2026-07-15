@@ -1,4 +1,3 @@
-use crate::backend::char_utils::MyCharUtils;
 use crate::backend::content::Content;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,16 +40,44 @@ impl Cursor {
     }
 
     #[inline]
-    pub(crate) fn line(&self) -> usize {
+    pub(crate) fn display_line(&self) -> usize {
         self.line + 1
     }
 
     #[inline]
-    pub(crate) fn col(&self) -> usize {
+    pub(crate) fn display_col(&self) -> usize {
         self.col + 1
     }
 
-    pub(crate) fn set_only_cursor(
+    #[inline]
+    pub(crate) fn get_line(&self) -> usize {
+        self.line
+    }
+
+    #[inline]
+    pub(crate) fn get_col(&self) -> usize {
+        self.col
+    }
+    #[inline]
+    pub(crate) unsafe fn set_col(&mut self, col: usize) {
+        self.col = col
+    }
+
+    pub(crate) fn validate_wide_chars(&mut self, content: &Content) {
+        if let Some(ch) = content[self.line].get(self.col) {
+            self.col -= ch.get_idx_diff_to_reach_start()
+        }
+    }
+    pub(crate) fn validate_wide_chars_forwards(&mut self, content: &Content) {
+        while let Some(ch) = content[self.line].get(self.col) {
+            if ch.get_idx_diff_to_reach_start() == 0 {
+                break;
+            }
+            self.col += 1;
+        }
+    }
+
+    pub(crate) fn set_only_cursor_mouse(
         &mut self,
         x: usize,
         y: usize,
@@ -61,13 +88,15 @@ impl Cursor {
         self.line = line;
         self.col = col;
         self.goal = HorizontalGoal::Column(col);
+
+        self.validate_wide_chars(content);
     }
 
     pub(crate) fn next(&mut self, content: &Content) {
-
         let line_len = content[self.line].len();
         if self.col < line_len {
             self.col += 1;
+            self.validate_wide_chars_forwards(content);
         } else if self.line + 1 < content.len() {
             self.line += 1;
             self.col = 0;
@@ -79,13 +108,13 @@ impl Cursor {
     pub(crate) fn next_word(&mut self, content: &Content) {
         let line_len = content[self.line].len();
         if self.col < line_len {
-            while content[self.line][self.col..].chars().next() == Some(' ') {
+            while content[self.line][self.col] == ' ' {
                 self.col += 1;
             }
-            if let Some(ch) = content[self.line][self.col..].chars().next() {
+            if let Some(ch) = content[self.line].get(self.col) {
                 let base_state = ch.is_variable_name();
                 while self.col < line_len {
-                    if content[self.line][self.col..].chars().next().unwrap().is_variable_name() == base_state { // Safety: self.col is less than line_len
+                    if content[self.line][self.col].is_variable_name() == base_state { // Safety: self.col is less than line_len
                         self.col += 1;
                     } else {
                         break;
@@ -118,19 +147,21 @@ impl Cursor {
             self.line -= 1;
             self.col = content[self.line].len();
         }
-    
+
+        self.validate_wide_chars(content);
+
         self.goal = HorizontalGoal::Column(self.col);
     }
 
     pub(crate) fn prev_word(&mut self, content: &Content) {
         if self.col > 0 {
-            while content[self.line][self.col..].chars().next() == Some(' ') {
+            while content[self.line].get(self.col).map(|c| *c == ' ').unwrap_or(false) {
                 self.col -= 1;
             }
-            if let Some(ch) = content[self.line][self.col - 1..].chars().next() {
+            if let Some(ch) = content[self.line].get(self.col - 1) {
                 let base_state = ch.is_variable_name();
                 while self.col > 0 {
-                    if content[self.line][self.col - 1..].chars().next().unwrap().is_variable_name() == base_state { // Safe if you call op_no_virtual_spaces before
+                    if content[self.line][self.col - 1].is_variable_name() == base_state { // Safe if you call op_no_virtual_spaces before
                         self.col -= 1;
                     } else {
                         break;
@@ -145,7 +176,7 @@ impl Cursor {
         self.goal = HorizontalGoal::Column(self.col);
     }
 
-    pub(crate) fn down(&mut self, i: usize, content: &Content,) {
+    pub(crate) fn down(&mut self, i: usize, content: &Content) {
         self.line += i;
         if self.line >= content.len() {
             self.line = content.len() - 1;
@@ -157,6 +188,8 @@ impl Cursor {
             HorizontalGoal::Column(c) => c.min(line_len),
             HorizontalGoal::EndOfLine => line_len,
         };
+
+        self.validate_wide_chars(content);
     }
     
 
@@ -171,6 +204,8 @@ impl Cursor {
             HorizontalGoal::Column(c) => c.min(line_len),
             HorizontalGoal::EndOfLine => line_len,
         };
+
+        self.validate_wide_chars(content);
     }
 
     #[inline]

@@ -1,211 +1,248 @@
-use std::fmt::Debug;
+use crate::assets::constants::{N_MAX_LITTLE, N_MAX_LITTLE_UNI};
+use crate::backend::display_char::DisplayChar;
+use crate::backend::display_string::{DisplaySlice, DisplayString};
+use crate::backend::encoding::Encoding;
+use std::ops::Deref;
+use std::vec;
 
-pub const N_MAX_LITTLE: usize = 10;
+pub enum LSIntoIter {
+    Little([DisplayChar; N_MAX_LITTLE], u8, u8),
+    Big(vec::IntoIter<DisplayChar>),
+}
+
+impl Iterator for LSIntoIter {
+    type Item = DisplayChar;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            LSIntoIter::Little(data, idx, len) => {
+                if idx >= len {
+                    None
+                } else {
+                    let to_return = Some(data[*idx as usize]);
+                    *idx += 1;
+                    to_return
+                }
+            },
+            LSIntoIter::Big(b) => b.next()
+        }
+    }
+}
 
 #[derive(Clone)]
 pub enum LittleString {
-    Little((u8, [u8; N_MAX_LITTLE])),
-    Big(String)
+    Little((u8, [DisplayChar; N_MAX_LITTLE])),
+    Big(DisplayString)
 }
 
-impl LittleString {
-    pub(crate) fn from_char_repeated(ch: u8, len: usize) -> Self {
-        if len < N_MAX_LITTLE {
-            let mut data = [0; N_MAX_LITTLE];
-            for i in 0..len {
-                data[i] = ch;
-            }
-            LittleString::Little((len as u8, data))
-        } else {
-            let mut s = String::with_capacity(len);
-            for _ in 0..len {
-                s.push(ch as char);
-            }
-            LittleString::Big(s)
-        }
-    }
-}
+impl IntoIterator for LittleString {
+    type Item = DisplayChar;
+    type IntoIter = LSIntoIter;
 
-impl Default for LittleString {
-    #[inline]
-    fn default() -> Self {
-        Self::empty()
-    }
-}
-
-impl FromIterator<u8> for LittleString {
-    fn from_iter<T: IntoIterator<Item=u8>>(iter: T) -> Self {
-        let mut iter = iter.into_iter();
-
-        let mut arr = [0; N_MAX_LITTLE];
-        for i in 0..N_MAX_LITTLE {
-            match iter.next() {
-                Some(v) => arr[i] = v,
-                None => return LittleString::Little((i as u8, arr)),
-            }
-        }
-
-        let mut vec= Vec::with_capacity(N_MAX_LITTLE + 1);
-        vec.extend(arr);
-        vec.extend(iter);
-        LittleString::Big(String::from_utf8(vec).unwrap())
-    }
-}
-
-impl Debug for LittleString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn into_iter(self) -> Self::IntoIter {
         match self {
             LittleString::Little((len, data)) => {
-                str::from_utf8(&data[..*len as usize]).unwrap().fmt(f)
+                LSIntoIter::Little(data, 0, len)
             }
             LittleString::Big(s) => {
-                s.fmt(f)
+                LSIntoIter::Big(s.into_iter())
             }
         }
     }
 }
 
-impl From<&str> for LittleString {
-    fn from(value: &str) -> Self {
-        if value.len() > N_MAX_LITTLE {
-            Self::Big(value.to_string())
-        } else {
-            let mut slice = [0; N_MAX_LITTLE];
-            slice[..value.len()].copy_from_slice(value.as_bytes());
-            Self::Little((value.len() as u8, slice))
+impl AsRef<DisplaySlice> for LittleString {
+    fn as_ref(&self) -> &DisplaySlice {
+        match self {
+            LittleString::Little((len, data)) => {
+                DisplaySlice::from_slice(&data[..*len as usize])
+            }
+            LittleString::Big(s) => {
+                s
+            }
         }
     }
 }
 
-impl From<char> for LittleString {
-    fn from(value: char) -> Self {
-        let mut slice = [0; N_MAX_LITTLE];
-        slice[..1].copy_from_slice(&[value as u8]);
-        Self::Little((1u8, slice))
-    }
-}
-
-impl From<String> for LittleString {
-    fn from(value: String) -> Self {
-        if value.len() > N_MAX_LITTLE {
-            Self::Big(value)
-        } else {
-            let mut slice = [0; N_MAX_LITTLE];
-            slice[..value.len()].copy_from_slice(value.as_bytes());
-            Self::Little((value.len() as u8, slice))
-        }
-    }
-}
-
-#[allow(dead_code)]
 impl LittleString {
+    pub(crate) fn iter(&'_ self) -> core::slice::Iter<'_, DisplayChar> {
+        match self {
+            LittleString::Little((len, data)) => {
+                data[..*len as usize].iter()
+            }
+            LittleString::Big(s) => {
+                s.gms.iter()
+            }
+        }
+    }
+    
     pub(crate) fn len(&self) -> usize {
         match self {
             LittleString::Little((len, _data)) => *len as usize,
             LittleString::Big(s) => s.len()
         }
     }
-
-    pub(crate) fn as_str(&self) -> &str {
-        match self {
-            LittleString::Little((len, data)) =>
-                str::from_utf8(&data[..*len as usize]).unwrap(),
-            LittleString::Big(s) =>
-                s.as_str(),
+    
+    pub(crate) fn encoding_change(&self, src: Encoding, dst: Encoding) -> Self {
+        match (src, dst) { 
+            (Encoding::UTF8(_), Encoding::UTF8(_)) => self.clone(), 
+            (Encoding::UTF8(_), Encoding::Raw    ) => {
+                let mut new = DisplayString::with_capacity(self.len());
+                for i in self.iter() {
+                    unsafe { i.utf8_to_raw(&mut new); } // Safety: We checked the encoding and it was utf8
+                }
+                Self::Big(new)
+            }, 
+            (Encoding::Raw    , Encoding::UTF8(_)) => {
+                let mut new = DisplayString::with_capacity(self.len());
+                for i in self.iter() {
+                    unsafe { i.raw_to_utf8(&mut new); } // Safety: We checked the encoding and it was utf8
+                }
+                Self::Big(new)
+            }, 
+            (Encoding::Raw    , Encoding::Raw    ) => self.clone(), 
         }
     }
 
-    pub(crate) fn added(mut self, other: &str) -> Self {
-        self.push_str(other);
-        self
+    pub(crate) fn from_spaces_repeated(len: usize) -> Self {
+        if len > N_MAX_LITTLE {
+            let mut s = DisplayString::with_capacity(len);
+            for _ in 0..len {
+                unsafe {
+                    s.push(const { DisplayChar::from_one_cell_utf8_char_unchecked(' ') })
+                } // Safety: spaces work for all encodings
+            }
+            Self::Big(s)
+        } else {
+            Self::Little((len as u8, [ unsafe { 
+                const {
+                    DisplayChar::from_one_cell_utf8_char_unchecked(' ')
+                }
+            }; N_MAX_LITTLE]))
+        }
     }
 
-    pub(crate) fn push_str(&mut self, other: &str) {
+    pub(crate) fn into_dstring(self) -> DisplayString {
         match self {
             LittleString::Little((len, data)) => {
-                let total_len = *len as usize + other.len();
-                if total_len > N_MAX_LITTLE {
-                    let mut s = String::with_capacity(total_len);
-                    s.push_str(str::from_utf8(&data[..*len as usize]).unwrap());
-                    s.push_str(other);
-                    *self = LittleString::Big(s);
-                } else {
-                    data[*len as usize..total_len].copy_from_slice(other.as_bytes());
-                    *len = total_len as u8;
-                }
+                DisplaySlice::from_slice(&data[..len as usize]).to_dstring()
             }
             LittleString::Big(s) => {
-                s.push_str(other);
+                s
             }
         }
     }
 
-    pub(crate) fn insert(&mut self, index: usize, ch: u8) {
-        let self_ = std::mem::take(self);
+    /// Safety: Make sure about the encodings
+    pub(crate) unsafe fn insert(&mut self, index: usize, ch: DisplayChar) {
+        let self_ = std::mem::replace(self, Self::empty());
         match self_ {
-            LittleString::Little((len, data)) => {
-                if len + 1 > N_MAX_LITTLE as u8 {
-                    let mut s = String::with_capacity(len as usize + 1);
-                    s.push_str(str::from_utf8(&data[..index]).unwrap());
-                    s.push(ch as char);
-                    s.push_str(str::from_utf8(&data[index..]).unwrap());
+            LittleString::Little((len, mut data)) => {
+                if len == N_MAX_LITTLE as u8 {
+                    let mut s = DisplayString::with_capacity(len as usize + 1);
+                    unsafe {
+                        s.push_slice(DisplaySlice::from_slice(&data[..index]));
+                        s.push(ch);
+                        s.push_slice(DisplaySlice::from_slice(&data[index..]));
+                    } // Safety: the caller
                     *self = LittleString::Big(s);
                 } else {
-                    let mut v = data.to_vec();
-                    v.insert(index, ch);
-                    *self = LittleString::Little((len + 1, *v.first_chunk().unwrap()))
+                    for i in (index..len as usize).rev() {
+                        data[i + 1] = data[i];
+                    }
+                    data[index] = ch;
+                    *self = LittleString::Little((len + 1, data))
                 }
             }
             LittleString::Big(mut s) => {
-                s.insert(index, ch as char);
+                s.insert(index, ch);
                 *self = LittleString::Big(s);
             }
         }
     }
 
-    pub(crate) fn to_string_clone(&self) -> String {
-        match self {
-            LittleString::Little((len, data)) => String::from_utf8(data[..*len as usize].to_vec()).unwrap(),
-            LittleString::Big(s) => s.clone(),
-        }
-    }
-
-    pub(crate) fn to_string_added_clone(&self, added: &str) -> String {
-        match self {
-            LittleString::Little((len, data)) => {
-                let mut s = String::with_capacity(*len as usize + added.len());
-                s.push_str(str::from_utf8(&data[..*len as usize]).unwrap());
-                s.push_str(added);
-                s
-            }
-            LittleString::Big(s) => {
-                let mut s = s.clone();
-                s.push_str(added);
-                s
-            }
-        }
-    }
-
     pub(crate) fn empty() -> LittleString {
-        LittleString::Little((0, [0; N_MAX_LITTLE]))
+        LittleString::Little((0, [unsafe { DisplayChar::zeroed() }; N_MAX_LITTLE]))
     }
 
-    pub(crate) fn push(&mut self, ch: char) {
-        if ch.len_utf8() != 1 { todo!("Not implemented"); }
+    /// Safety: It should be one cell utf8 char
+    pub(crate) unsafe fn from_one_cell_utf8_char_unchecked(c: char) -> LittleString {
+        let mut data = [unsafe { DisplayChar::zeroed() }; N_MAX_LITTLE];
+        unsafe {
+            data[0] = DisplayChar::from_one_cell_utf8_char_unchecked(c);
+        } // Safety: The caller
+        LittleString::Little((1, data))
+    }
+
+
+    pub(crate) fn from_slice(slice: &DisplaySlice) -> LittleString {
+        if slice.len() > N_MAX_LITTLE {
+            LittleString::Big(slice.to_dstring())
+        } else {
+            let mut data = [unsafe { DisplayChar::zeroed() }; N_MAX_LITTLE];
+            data[..slice.len()].copy_from_slice(slice.as_ref());
+            LittleString::Little((slice.len() as u8, data))
+        }
+    }
+
+
+    /// Safety: Make sure the encoding is correct
+    pub(crate) unsafe fn push(&mut self, ch: DisplayChar) {
         match self {
             LittleString::Little((len, data)) => {
                 if *len == N_MAX_LITTLE as u8 {
-                    let mut s = String::with_capacity(N_MAX_LITTLE + 1);
-                    s.push_str(str::from_utf8(data).unwrap());
-                    s.push(ch);
+                    let mut s = DisplayString::with_capacity(N_MAX_LITTLE + 1);
+                    for i in data {
+                        unsafe { s.push(*i); } // Safety: The caller
+                    }
+                    unsafe { s.push(ch); } // Safety: The caller
                     *self = LittleString::Big(s);
                 } else {
-                    data[*len as usize] = ch as u8;
+                    data[*len as usize] = ch;
                     *len += 1;
                 }
             }
             LittleString::Big(s) => {
-                s.push(ch);
+                unsafe { s.push(ch); } // Safety: The caller
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum LittleStringUni {
+    /// This SHOULD be a valid utf-8 slice:
+    Little((u8, [u8; N_MAX_LITTLE_UNI])),
+    Big(String)
+}
+
+impl LittleStringUni {
+
+    pub(crate) fn new(value: &str) -> Self {
+        if value.len() > N_MAX_LITTLE_UNI {
+            Self::Big(value.to_string())
+        } else {
+            let mut slice = [0; N_MAX_LITTLE_UNI];
+            slice[..value.len()].copy_from_slice(value.as_bytes());
+            Self::Little((value.len() as u8, slice))
+        }
+    }
+
+    pub(crate) fn is_variable_name(&self) -> bool {
+        self.deref().chars().next().map(|ch| ch.is_alphanumeric() || ch == '_').unwrap_or(false)
+    }
+}
+
+impl Deref for LittleStringUni {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            LittleStringUni::Little((len, data)) => {
+                str::from_utf8(&data[..*len as usize]).unwrap()
+            }
+            LittleStringUni::Big(s) => {
+                s
             }
         }
     }

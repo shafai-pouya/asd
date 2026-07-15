@@ -1,12 +1,12 @@
-use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO};
+use crate::assets::colors::colors::C_LOG_INFO;
+use crate::assets::constants::DURATION_BIG_TIMER;
 use crate::backend::caret::Carets;
-use crate::backend::checkpoint::checkpoints::{Checkpoints, DURATION_BIG_TIMER};
-use crate::backend::content::{Content, LineEnding};
+use crate::backend::checkpoint::checkpoints::Checkpoints;
+use crate::backend::content::Content;
+use crate::backend::encoding::Encoding;
 use crate::ui::custom_scrollbar::CustomScrollbar;
 use crate::ui::log::Log;
 use std::ffi::OsStr;
-use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -15,35 +15,31 @@ pub(crate) struct Buffer {
     pub showing_filename: String,
     
     pub carets: Carets,
-    pub content: Content,
     pub scrollbar: CustomScrollbar,
     pub drag_start_pos: (usize, usize),
     pub tab_size: usize,
     pub modified: bool,
-    pub line_ending: LineEnding,
+
+    pub encoding: Encoding,
+    pub content: Content,
+
     pub checkpoints: Checkpoints,
 }
 
 impl Buffer {
-    pub(crate) fn new(path: PathBuf, logs: &mut Vec<Log>) -> Buffer {
+    pub(crate) fn new_from_file(path: PathBuf, logs: &mut Vec<Log>) -> Buffer {
         let showing_filename = path.file_name().unwrap_or(OsStr::new(path.as_os_str())).to_str().unwrap().to_string();
-        let (content, line_ending) = Content::from_file(&path, logs);
-        Buffer {
-            path,
-            showing_filename,
-            carets: Carets::new(),
-            content,
-            scrollbar: CustomScrollbar::new(),
-            drag_start_pos: (0, 0),
-            tab_size: 4,
-            modified: false,
-            line_ending,
-            checkpoints: Checkpoints::new(),
-        }
+        let (encoding, content) = Encoding::from_file(&path, logs);
+        Self::new(path, showing_filename, content, encoding)
     }
-    pub(crate) fn new_custom(path: PathBuf, showing_filename: String, content: &str) -> Buffer {
-        let (content, line_ending) = Content::from_str(content);
+    pub(crate) fn new_custom(path: PathBuf, showing_filename: String, content: &str) -> Self {
+        let (encoding, content) = Encoding::from_str_utf8(content);
+        Self::new(path, showing_filename, content, encoding)
+    }
+    
+    pub(crate) fn new(path: PathBuf, showing_filename: String, content: Content, encoding: Encoding) -> Buffer {
         Buffer {
+            encoding,
             path,
             showing_filename,
             carets: Carets::new(),
@@ -52,59 +48,14 @@ impl Buffer {
             drag_start_pos: (0, 0),
             tab_size: 4,
             modified: false,
-            line_ending,
             checkpoints: Checkpoints::new(),
         }
     }
 
     
     pub(crate) fn save(&mut self, file_path: Option<&Path>, logs: &mut Vec<Log>) {
-        match File::options().write(true).truncate(true).create(true).open(file_path.unwrap_or(&self.path)) {
-            Ok(mut file) => {
-                let mut first_line = true;
-                for line in self.content.get_lines() {
-                    if !first_line {
-                        match file.write_all(self.line_ending.get()) {
-                            Ok(_) => {},
-                            Err(e) => {
-                                logs.push(Log {
-                                    message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
-                                    color: C_LOG_ERROR,
-                                    handler: None,
-                                });
-                                return;
-                            }
-                        }
-                    }
-                    first_line = false;
-                    match file.write_all(line.as_bytes()) {
-                        Ok(_) => {},
-                        Err(e) => {
-                            logs.push(Log {
-                                message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
-                                color: C_LOG_ERROR,
-                                handler: None,
-                            });
-                            return;
-                        }
-                    }
-                }
-
-                self.modified = false;
-
-                logs.push(Log {
-                    message: "[I:1] File Saved!".to_string(),
-                    color: Default::default(),
-                    handler: None,
-                });
-            }
-            Err(e) => {
-                logs.push(Log {
-                    message: format!("[E:{}] Error opening file to save: {}", e.kind() as u32, e.kind().to_string()),
-                    color: C_LOG_ERROR,
-                    handler: None,
-                });
-            }
+        if self.encoding.save_buffer(&self.content, file_path.unwrap_or(&self.path), logs) {
+            self.modified = false;
         }
     }
     
@@ -132,9 +83,5 @@ impl Buffer {
         } else {
             Ok(())
         }
-    }
-
-    pub(crate) fn force_quit(&mut self) {
-        // Nothing
     }
 }

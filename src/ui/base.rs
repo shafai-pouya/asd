@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, Widget};
 use ratatui::Frame;
 use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL};
 
-pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool) {
+pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool) -> Vec<(u16, u16, u32)> {
     let rows = Layout::vertical([
         Constraint::default(), Constraint::Length(1), Constraint::Length(get_logs_height(app)), Constraint::Length(1)
     ]);
@@ -45,9 +45,10 @@ pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool
 
     render_bar(app, bar, under_bar, frame.buffer_mut());
 
+    let (returned_content_rect, emoji_queue) = render_file(app, file_area, scroll_area, frame.buffer_mut(), can_use_cursor);
     let last_content_rect = Rect {
         height: frame.area().height - 3,
-        ..render_file(app, file_area, scroll_area, frame.buffer_mut(), can_use_cursor)
+        ..returned_content_rect
     };
     app.last_content_rect = last_content_rect;
 
@@ -64,4 +65,6 @@ pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool
     };
 
     render_logs(app, frame, logs_area);
+    
+    emoji_queue
 }

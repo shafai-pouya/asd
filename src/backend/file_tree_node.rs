@@ -1,6 +1,7 @@
 use crate::assets::colors::colors::{C_TREE_FG_DIR, C_TREE_FG_FILE};
+use crate::assets::constants::{TREE_FILE_LOADED_SYMBOL, TREE_FILE_MODIFIED_SYMBOL};
 use crate::backend::buffers::{Buffers, Inode};
-use crate::backend::file_tree::{NodePointer, FILE_LOADED, FILE_MODIFIED};
+use crate::backend::file_tree::NodePointer;
 use crate::ui::log::Log;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -142,8 +143,8 @@ impl FileTreeNode {
         str.push(' '); coloring_start_x += 1;
         str.push(match buffers.get_online_state(self.get_mut(ptr).unwrap().get_inode(vic)) { // The pointer should be valid
             OnlineState::Nothing => ' ',
-            OnlineState::Opened => FILE_LOADED,
-            OnlineState::Modified => FILE_MODIFIED,
+            OnlineState::Opened => TREE_FILE_LOADED_SYMBOL,
+            OnlineState::Modified => TREE_FILE_MODIFIED_SYMBOL,
         }); coloring_start_x += 1;
         str.push(' ');
         let mut parent = self as &FileTreeNode;
@@ -180,11 +181,6 @@ impl FileTreeNode {
         }
     }
 
-
-    // #[inline]
-    // pub(crate) fn is_expanded(&self) -> bool {
-    //     self.expanded
-    // }
 
     pub(crate) fn get_coloring_proto(&self) -> ColoringProto {
         if self.is_dir { ColoringProto::Dir } else { ColoringProto::File }

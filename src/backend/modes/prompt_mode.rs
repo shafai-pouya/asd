@@ -1,9 +1,12 @@
 use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR, C_LOG_INFO, C_LOG_TODO};
-use crate::backend::event_handler::{EventFlags, EventHandler};
+use crate::backend::display_string::DisplayString;
+use crate::backend::encoding::{Encoding, LineEnding};
+use crate::backend::event_handler::EventHandler;
+use crate::backend::little_string::LittleString;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
 use crate::ui::log::Log;
-use crate::App;
+use crate::{movec, App};
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -108,8 +111,8 @@ impl SaveAsMode {
             event_handler: EventHandler::new(
                 vec![
                     /// Placement Operator
-                     |data, app, e, f| {
-                         if (f & EventFlags::AllModifiers & (!EventFlags::M_SHIFT)) == EventFlags::empty() &&
+                     |data, app, e| {
+                         if (e.modifiers & (!KeyModifiers::SHIFT)) == KeyModifiers::empty() &&
                              let KeyCode::Char(ch) = e.code {
                              if let Some(sel) = data.selection {
                                  let min = sel.min(data.cursor);
@@ -122,16 +125,16 @@ impl SaveAsMode {
                              data.cursor += 1;
                              return false;
                          }
-                         if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
+                         if e.modifiers == KeyModifiers::empty() &&
                              KeyCode::Enter == e.code {
                              app.change_mode = Some(Box::new(EditorMode::new()));
                              app.logs.clear();
                              let active_buffer = app.buffers.active_mut();
-                             let _ = active_buffer.save(Some(Path::new(&data.filepath)), &mut app.logs);
+                             active_buffer.save(Some(Path::new(&data.filepath)), &mut app.logs);
                              active_buffer.modified = true;
                              return false;
                          }
-                         if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
+                         if e.modifiers == KeyModifiers::empty() &&
                              KeyCode::Tab == e.code {
                              app.logs.push(Log {
                                  message: "Autocompletion is not implemented yet (todo)".to_string(),
@@ -146,8 +149,8 @@ impl SaveAsMode {
 
 
                     /// Shortcuts Operator
-                    |data, app, e, f| {
-                        if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
+                    |data, app, e| {
+                        if e.modifiers == KeyModifiers::empty() &&
                             e.code == KeyCode::Esc {
                             app.change_mode = Some(Box::new(EditorMode::new()));
                             app.logs.clear();
@@ -158,20 +161,32 @@ impl SaveAsMode {
                                 if let Some(sel) = data.selection {
                                     let min = sel.min(data.cursor);
                                     let max = sel.max(data.cursor);
-                                    App::op_set_clipboard(data.filepath[min as usize..max as usize].as_bytes(), &mut app.logs);
+                                    app.internal_clipboard = (Encoding::UTF8(LineEnding::CRLF), movec![movec![
+                                        LittleString::Big(DisplayString::from_str(
+                                            &data.filepath[min as usize..max as usize]
+                                        ))
+                                    ]]);
                                 }
                                 false
                             }
                             KeyCode::Char('v') => {
-                                if let Some(clip) = App::op_get_clipboard(&mut app.logs) {
-                                    if clip.contains('\n') {
-                                        app.logs.push(Log {
-                                            message: "There is enter in your pasting thingy".to_string(),
-                                            color: C_LOG_ERROR,
-                                            handler: None,
-                                        });
-                                        return false;
-                                    }
+                                let clip = &app.internal_clipboard;
+                                if clip.1.len() != 1 {
+                                    app.logs.push(Log {
+                                        message: "There is enter in your pasting thingy".to_string(),
+                                        color: C_LOG_ERROR,
+                                        handler: None,
+                                    });
+                                    return false;
+                                }
+                                if clip.1[0].len() != 1 {
+                                    app.logs.push(Log {
+                                        message: "There is enter in your pasting thingy".to_string(),
+                                        color: C_LOG_ERROR,
+                                        handler: None,
+                                    });
+                                    return false;
+                                }
                                     let range = if let Some(sel) = data.selection {
                                         let min = sel.min(data.cursor);
                                         let max = sel.max(data.cursor);
@@ -181,9 +196,8 @@ impl SaveAsMode {
                                     } else {
                                         data.cursor as usize..data.cursor as usize
                                     };
-                                    data.filepath.replace_range(range, &clip);
-                                    data.cursor += clip.len() as u16;
-                                }
+                                data.filepath.replace_range(range, &clip.1[0][0].as_ref().to_string_utf8(clip.0));
+                                data.cursor += clip.1.len() as u16;
                                 false
                             }
                             KeyCode::Char('x') => {
@@ -192,7 +206,11 @@ impl SaveAsMode {
                                     let max = sel.max(data.cursor);
                                     data.selection = None;
                                     data.cursor = min;
-                                    App::op_set_clipboard(data.filepath[min as usize..max as usize].as_bytes(), &mut app.logs);
+                                    app.internal_clipboard = (Encoding::UTF8(LineEnding::CRLF), movec![movec![
+                                        LittleString::Big(DisplayString::from_str(
+                                            &data.filepath[min as usize..max as usize]
+                                        ))
+                                    ]]);
                                     data.filepath.drain(min as usize..max as usize);
                                 }
                                 false
@@ -203,11 +221,11 @@ impl SaveAsMode {
 
 
                     /// Arrow keys
-                    |data, _app, e, f| {
-                        if (f & EventFlags::M_CTRL_ALT_SUPER) != EventFlags::M_NOTHING {
+                    |data, _app, e| {
+                        if (e.modifiers & (KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)) != KeyModifiers::empty() {
                             return true;
                         }
-                        match (e.code, (f & EventFlags::M_SHIFT) != EventFlags::empty()) {
+                        match (e.code, (e.modifiers & KeyModifiers::SHIFT) != KeyModifiers::empty()) {
                             (KeyCode::Left, false) => {
                                 data.selection = None;
                                 data.cursor = data.cursor.saturating_sub(1);
@@ -243,7 +261,7 @@ impl SaveAsMode {
                     },
 
                     /// Remove methods
-                    |data, _app, e, _f| {
+                    |data, _app, e| {
                         match (e.code, e.modifiers) {
                             (KeyCode::Backspace, KeyModifiers::NONE) => {
                                 if let Some(sel) = data.selection {
@@ -282,7 +300,7 @@ impl SaveAsMode {
                     /// Double Click Handler
                     EventHandler::default_double_click_handler,
 
-                    |data, _, _app, e, _f| {
+                    |data, _, _app, e| {
                         match (e.kind, e.modifiers) {
                             (MouseEventKind::Down(MouseButton::Left), KeyModifiers::NONE) => {
                                 data.selection = None;
@@ -307,7 +325,7 @@ impl SaveAsMode {
                     }
                 ],
                 vec![
-                    |_, app, _e, _f| {
+                    |_, app, _e| {
                         // todo!();
                         app.logs.push(Log {
                             message: "Double clicking when saving as is not implemented yet (todo)".to_string(),

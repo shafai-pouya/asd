@@ -1,85 +1,20 @@
-use std::time::{Duration, Instant};
-use bitflags::bitflags;
-use crossterm::event::{Event, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use crate::assets::constants::DOUBLE_CLICK_DURATION;
 use crate::App;
+use crossterm::event::{Event, KeyEvent, MouseEvent, MouseEventKind};
+use std::time::Instant;
 
-pub const DOUBLE_CLICK_DURATION: Duration = Duration::from_millis(300);
-
-bitflags! {
-    #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-    pub struct EventFlags: u8 {
-        // const MouseEvent = 1 << 0;
-        const M_SHIFT = 1 << 1;
-        const M_CTRL = 1 << 2;
-        const M_ALT = 1 << 3;
-        const M_SUPER = 1 << 4;
-        // const DoubleClicked = 1 << 5;
-
-        const AllModifiers = EventFlags::M_SHIFT.bits() |
-            EventFlags::M_CTRL.bits() |
-            EventFlags::M_ALT.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_CTRL_SHIFT = EventFlags::M_CTRL.bits() |
-            EventFlags::M_SHIFT.bits();
-        const M_CTRL_ALT = EventFlags::M_CTRL.bits() |
-            EventFlags::M_ALT.bits();
-        const M_CTRL_SUPER = EventFlags::M_CTRL.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_SHIFT_ALT = EventFlags::M_SHIFT.bits() |
-            EventFlags::M_ALT.bits();
-        const M_SHIFT_SUPER = EventFlags::M_SHIFT.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_ALT_SUPER = EventFlags::M_ALT.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_CTRL_SHIFT_ALT = EventFlags::M_CTRL.bits() |
-            EventFlags::M_SHIFT.bits() |
-            EventFlags::M_ALT.bits();
-        const M_CTRL_SHIFT_SUPER = EventFlags::M_CTRL.bits() |
-            EventFlags::M_SHIFT.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_CTRL_ALT_SUPER = EventFlags::M_CTRL.bits() |
-            EventFlags::M_ALT.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_SHIFT_ALT_SUPER = EventFlags::M_SHIFT.bits() |
-            EventFlags::M_ALT.bits() |
-            EventFlags::M_SUPER.bits();
-        const M_CTRL_SHIFT_ALT_SUPER = EventFlags::M_CTRL.bits() |
-            EventFlags::M_SHIFT.bits() |
-            EventFlags::M_ALT.bits()|
-            EventFlags::M_SUPER.bits();
-        const M_NOTHING = 0;
-    }
-}
-
-impl EventFlags {
-    pub(crate) fn modifiers(mut self, modifiers: KeyModifiers) -> Self {
-        if (modifiers & KeyModifiers::CONTROL) != KeyModifiers::empty() {
-            self.insert(EventFlags::M_CTRL);
-        }
-        if (modifiers & KeyModifiers::ALT) != KeyModifiers::empty() {
-            self.insert(EventFlags::M_ALT);
-        }
-        if (modifiers & KeyModifiers::SHIFT) != KeyModifiers::empty() {
-            self.insert(EventFlags::M_SHIFT);
-        }
-        if (modifiers & KeyModifiers::SUPER) != KeyModifiers::empty() {
-            self.insert(EventFlags::M_SUPER);
-        }
-        self
-    }
-}
 
 pub struct EventHandler<T> {
-    key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent, EventFlags) -> bool>,
-    mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent, EventFlags) -> bool>,
-    double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent, EventFlags) -> bool>
+    key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent) -> bool>,
+    mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool>,
+    double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>
 }
 
 impl<T> EventHandler<T> {
     pub(crate) fn new(
-        key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent, EventFlags) -> bool>,
-        mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent, EventFlags) -> bool>,
-        double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent, EventFlags) -> bool>
+        key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent) -> bool>,
+        mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool>,
+        double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>
     ) -> Self {
         Self {
             key_handlers,
@@ -98,7 +33,7 @@ impl<T> EventHandler<T> {
 
     fn handle_key_event(&mut self, arg: &mut T, app: &mut App, event: KeyEvent) {
         for key_handler in &self.key_handlers {
-            if !key_handler(arg, app, &event, EventFlags::empty().modifiers(event.modifiers)) {
+            if !key_handler(arg, app, &event) {
                 break;
             }
         }
@@ -106,13 +41,13 @@ impl<T> EventHandler<T> {
 
     fn handle_mouse_event(&mut self, arg: &mut T, app: &mut App, event: MouseEvent) {
         for mouse_handler in &self.mouse_handlers {
-            if !mouse_handler(arg, self, app, &event, EventFlags::empty().modifiers(event.modifiers)) {
+            if !mouse_handler(arg, self, app, &event) {
                 break;
             }
         }
     }
 
-    pub(crate) fn default_double_click_handler(arg: &mut T, self_: &Self, app: &mut App, e: &MouseEvent, f: EventFlags) -> bool {
+    pub(crate) fn default_double_click_handler(arg: &mut T, self_: &Self, app: &mut App, e: &MouseEvent) -> bool {
         if !matches!(e.kind, MouseEventKind::Down(_)) {
             return true;
         }
@@ -128,7 +63,7 @@ impl<T> EventHandler<T> {
             );
         } else {
             for double_click_handler in &self_.double_click_handlers {
-                if !double_click_handler(arg, app, e, f) {
+                if !double_click_handler(arg, app, e) {
                     return false;
                 }
             }

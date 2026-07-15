@@ -43,6 +43,8 @@ pub mod colors {
 
     pub static C_BG_NORMAL: Color = Color::Rgb(59, 34, 76);
     pub static C_FG_NORMAL: Color = Color::Rgb(163, 159, 231);
+    pub static C_BG_SPECIAL_BYTE1: Color = Color::Green;
+    pub static C_BG_SPECIAL_BYTE2: Color = Color::Red;
     
     
     pub static C_BG_BAR: Color = Color::Rgb(40, 23, 51);

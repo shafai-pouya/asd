@@ -1,3 +1,5 @@
+extern crate core;
+
 mod assets;
 mod ui;
 mod backend;
@@ -5,11 +7,15 @@ mod edit_operators;
 mod edit_controller;
 
 use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_HINT};
+use crate::assets::constants::POLL_DURATION;
 use crate::backend::buffer::Buffer;
 use crate::backend::buffers::{Buffers, Inode};
+use crate::backend::encoding::Encoding;
 use crate::backend::file_tree::FileTree;
+use crate::backend::little_string::LittleString;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
+use crate::backend::mostly_one_vec::MostlyOneVec;
 use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::log::Log;
@@ -28,8 +34,7 @@ use std::io::Write;
 #[cfg(debug_assertions)]
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 pub struct App {
     /// If actives, The application exits in the next loop
@@ -37,9 +42,8 @@ pub struct App {
 
     buffers: Buffers,
 
-
+    /// The file tree
     file_tree: Option<FileTree>,
-    // buffer: Buffer,
 
     pub logs: Vec<Log>,
 
@@ -60,30 +64,29 @@ pub struct App {
     next_is_separator_event: bool,
 
 
-    pub virtual_inode_counter: usize
+    pub virtual_inode_counter: usize,
+    
+    pub internal_clipboard: Clipboard,
 }
 
-pub const POLL_DURATION: Duration = Duration::from_millis(100);
-
-pub const READ_ONLY_PATH: &str = "/dev/full";
+pub type Clipboard = (Encoding, MostlyOneVec<MostlyOneVec<LittleString>>);
 
 impl App {
     #[inline]
     fn no_file() -> Self {
         // todo: change this function
-        // todo!();
         let _ = execute!(
             std::io::stdout(),
             DisableMouseCapture,
             SetForegroundColor(crossterm::style::Color::Red),
         );
-        eprintln!("Use the following syntax:\n $ asd /path/to/file/or/dir");
+        eprint!("Use the following syntax:\n $ asd /path/to/file/or/dir\n");
         let _ = execute!(
             std::io::stdout(),
             ResetColor,
         );
         std::process::exit(1);
-        // Self::file("src/main.rs")
+        // Self::file("/tmp/test")
     }
 
     #[inline]
@@ -110,7 +113,7 @@ impl App {
             });
             Inode::virtual_generator(&mut vic)
         });
-        hm.insert(inode, Buffer::new(PathBuf::from(path), &mut logs));
+        hm.insert(inode, Buffer::new_from_file(PathBuf::from(path), &mut logs));
         let is_dir = match path.metadata() {
             Ok(meta) => meta.file_type().is_dir(),
             Err(_) => false,
@@ -136,6 +139,7 @@ impl App {
             double_click_details: (u16::MAX, u16::MAX, Instant::now()),
             change_mode: None,
             logs,
+            internal_clipboard: (Encoding::Raw, movec![]),
         }
     }
     fn help() -> Self {
@@ -154,6 +158,7 @@ impl App {
             double_click_details: (u16::MAX, u16::MAX, Instant::now()),
             change_mode: None,
             logs,
+            internal_clipboard: (Encoding::Raw, movec![]),
         }
     }
 }
@@ -170,9 +175,12 @@ impl App {
 
     #[inline]
     pub(crate) fn draw(&mut self, terminal: &mut DefaultTerminal, mode: &mut Box<dyn Mode>) {
+        let mut emoji_queue = vec![];
         terminal.draw(|frame| {
-            self.render(frame, mode);
+            emoji_queue = self.render(frame, mode);
         }).unwrap();  // I can't do anything. I let it crash
+        self.terminal_cursor.render_emoji_queue(emoji_queue);
+        self.terminal_cursor.render1();
         self.terminal_cursor.render2(terminal);
     }
 
@@ -216,10 +224,10 @@ impl App {
     }
 
     #[inline]
-    fn render(&mut self, frame: &mut Frame, mode: &mut Box<dyn Mode>) {
-        render_base(self, frame, !mode.needs_terminal_cursor());
-        self.terminal_cursor.render1(frame);
+    fn render(&mut self, frame: &mut Frame, mode: &mut Box<dyn Mode>) -> Vec<(u16, u16, u32)> {
+        let emoji_queue = render_base(self, frame, !mode.needs_terminal_cursor());
         mode.render_function(frame);
+        emoji_queue
     }
 
     #[inline]
@@ -242,77 +250,6 @@ impl App {
             }
         }
     }
-
-
-    fn op_set_clipboard(data: &[u8], logs: &mut Vec<Log>) {
-        match Command::new("xclip")
-            .args([
-                "-selection",
-                "clipboard",
-            ])
-            .stdin(Stdio::piped())
-            .spawn() {
-            Ok(mut clip_command) => {
-                let mut stdin = clip_command.stdin.take().unwrap(); // Safety: stdin is piped
-                match stdin.write_all(data) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        logs.push(Log {
-                            message: format!("[E:{}] Error opening stdin of xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_LOG_ERROR,
-                            handler: None,
-                        });
-                        return;
-                    }
-                };
-                drop(stdin);
-                match clip_command.wait() {
-                    Ok(_) => {}
-                    Err(e) => {
-                        logs.push(Log {
-                            message: format!("[E:{}] Error waiting for xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_LOG_ERROR,
-                            handler: None,
-                        });
-                    }
-                };
-            }
-            Err(e) => {
-                logs.push(Log {
-                    message: format!("[E:{}] Error opening xclip to copy data: {}", e.kind() as u32, e.kind().to_string()),
-                    color: C_LOG_ERROR,
-                    handler: None,
-                });
-            }
-        }
-    }
-
-    fn op_get_clipboard(logs: &mut Vec<Log>) -> Option<String> {
-        let text = String::from_utf8(
-            match Command::new("xclip")
-                .args([
-                    "-selection",
-                    "clipboard",
-                    "-o"
-                ])
-                .output()
-            {
-                Ok(o) => o,
-                Err(e) => {
-                    logs.push(Log {
-                        message: format!("[E:{}] Error getting the clipboard: {}", e.kind() as u32, e.kind().to_string()),
-                        color: C_LOG_ERROR,
-                        handler: None,
-                    });
-                    return None;
-                }
-            }
-                .stdout
-        )
-            .unwrap();
-        Some(text)
-    }
-
 
     fn operate_quit(&mut self, ) {
         self.buffers.commit_all(&mut self.logs);
@@ -345,7 +282,7 @@ fn main() {
         let file = OpenOptions::new()
            .read(true)
            .write(true)
-           .open("/dev/pts/5")
+           .open("/dev/pts/4")
             .unwrap();
 
 

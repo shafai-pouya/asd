@@ -1,12 +1,12 @@
-use crate::backend::event_handler::{EventFlags, EventHandler};
+use crate::backend::event_handler::EventHandler;
+use crate::backend::modes::menu_mode::MenuMode;
 use crate::backend::modes::prompt_mode::SaveAsMode;
 use crate::backend::modes::Mode;
 use crate::edit_controller::EditController;
+use crate::edit_operators::EditOperators;
 use crate::App;
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::Frame;
-use crate::backend::modes::menu_mode::MenuMode;
-use crate::edit_operators::EditOperators;
 
 pub struct EditorMode {
     handler: EventHandler<()>,
@@ -30,18 +30,18 @@ impl EditorMode {
             handler: EventHandler::new(
                 vec![
                     /// Placement Operator
-                    |_, app, e, f| {
-                        if (f & EventFlags::AllModifiers & (!EventFlags::M_SHIFT)) == EventFlags::empty() &&
-                           let KeyCode::Char(ch) = e.code {
+                    |_, app, e| {
+                        if (e.modifiers & (!KeyModifiers::SHIFT)) == KeyModifiers::empty() &&
+                            let KeyCode::Char(ch) = e.code {
                             app.buffers.active_mut().place_char(ch, app.last_content_rect, &mut app.logs);
                             return false;
                         }
-                        if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
+                        if e.modifiers == KeyModifiers::empty() &&
                             KeyCode::Enter == e.code {
                             app.buffers.active_mut().place_new_line(app.last_content_rect, &mut app.logs);
                             return false;
                         }
-                        if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
+                        if e.modifiers == KeyModifiers::empty() &&
                             KeyCode::Tab == e.code {
                             app.buffers.active_mut().operate_tab(app.last_content_rect, &mut app.logs);
                             return false;
@@ -51,18 +51,18 @@ impl EditorMode {
 
 
                     /// Shortcuts Operator
-                    |_, app, e, f| {
-                        if (f & EventFlags::AllModifiers) == EventFlags::empty() &&
+                    |_, app, e| {
+                        if e.modifiers == KeyModifiers::empty() &&
                             KeyCode::Esc == e.code {
                             app.change_mode = Some(Box::new(MenuMode::new_menu_basic()));
                             return false;
                         }
-                        if (f & EventFlags::AllModifiers) == EventFlags::M_CTRL | EventFlags::M_SHIFT &&
+                        if e.modifiers == (KeyModifiers::CONTROL | KeyModifiers::SHIFT) &&
                             e.code == KeyCode::Char('z') {
                             app.buffers.active_mut().operate_redo(app.last_content_rect, &mut app.logs);
                             return false;
                         }
-                        if (f & EventFlags::AllModifiers) == EventFlags::M_CTRL_ALT &&
+                        if e.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) &&
                             e.code == KeyCode::Char('s') {
                             app.change_mode = Some(Box::new(
                                 SaveAsMode::new(app)
@@ -70,14 +70,14 @@ impl EditorMode {
                             return false;
                         }
 
-                        if (f & EventFlags::AllModifiers) == EventFlags::M_CTRL | EventFlags::M_ALT &&
+                        if e.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) &&
                             e.code == KeyCode::Char('q') {
                             app.operate_force_quit();
                             return false;
                         }
 
 
-                        if (f & EventFlags::AllModifiers) != EventFlags::M_CTRL {
+                        if e.modifiers != KeyModifiers::CONTROL {
                             return true;
                         }
 
@@ -92,24 +92,33 @@ impl EditorMode {
                                 app.buffers.active_mut().operate_save(&mut app.logs); false
                             }
                             KeyCode::Char('c') => {
-                                app.buffers.active_mut().operate_copy(app.last_content_rect, &mut app.logs); false
+                                app.buffers.active_mut().operate_copy(app.last_content_rect, &mut app.logs, &mut app.internal_clipboard); false
                             }
                             KeyCode::Char('v') => {
-                                app.buffers.active_mut().operate_paste(app.last_content_rect, &mut app.logs); false
+                                app.buffers.active_mut().operate_paste(app.last_content_rect, &mut app.logs, &mut app.internal_clipboard); false
                             }
                             KeyCode::Char('x') => {
-                                app.buffers.active_mut().operate_cut(app.last_content_rect, &mut app.logs); false
+                                app.buffers.active_mut().operate_cut(app.last_content_rect, &mut app.logs, &mut app.internal_clipboard); false
                             }
                             KeyCode::Char('z') => {
                                 app.buffers.active_mut().operate_undo(app.last_content_rect, &mut app.logs); false
                             }
+                            // KeyCode::Char('n') => {
+                            //     let b = app.buffers.active_mut();
+                            //     unsafe {
+                            //         b.content.replace_text(&mut b.checkpoints,
+                            //                                &mut CursorEditor { cursors: &mut b.carets, cursor: 0 },
+                            //                                movec!(LittleString::Big(DisplayString::null())));
+                            //     }
+                            //     false
+                            // }
                             _ => true,
                         }
                     },
 
 
                     /// Arrow keys
-                    |_, app, e, f| {
+                    |_, app, e| {
                         #[derive(Clone, Copy, Eq, PartialEq)]
                         enum Arrow {L, R, U, D, End, Home, PU, PD}
                         let arrow = match e.code {
@@ -126,7 +135,7 @@ impl EditorMode {
 
                         let active_buffer = app.buffers.active_mut();
 
-                        if (f & EventFlags::AllModifiers) == EventFlags::M_ALT {
+                        if e.modifiers == KeyModifiers::ALT {
                             match arrow {
                                 Arrow::L => active_buffer.operate_scroll_prev(1, &mut app.logs),
                                 Arrow::R => active_buffer.operate_scroll_next(1, &mut app.logs),
@@ -139,11 +148,11 @@ impl EditorMode {
                             }
                             return false;
                         }
-                        if (f & EventFlags::M_ALT_SUPER) != EventFlags::M_NOTHING {
+                        if (e.modifiers & (KeyModifiers::ALT | KeyModifiers::SUPER)) != KeyModifiers::empty() {
                             return true;
                         }
                         
-                        if (f & EventFlags::M_CTRL) == EventFlags::M_CTRL && (arrow == Arrow::L || arrow == Arrow::R) {
+                        if (e.modifiers & KeyModifiers::CONTROL) == KeyModifiers::CONTROL && (arrow == Arrow::L || arrow == Arrow::R) {
                             active_buffer.op_no_virtual_spaces();
                         }
 
@@ -151,30 +160,30 @@ impl EditorMode {
                         for caret in active_buffer.carets.carets.iter_mut() {
                             let mut pos = *caret.get_position();
 
-                            if (f & EventFlags::M_SHIFT) == EventFlags::M_SHIFT {
-                                if pos.selection.is_none() {
-                                    pos.selection.set_to(&pos.cursor);
+                            if (e.modifiers & KeyModifiers::SHIFT) == KeyModifiers::SHIFT {
+                                if pos.is_selection_none() {
+                                    pos.set_selection_to_cursor();
                                 }
                             } else {
-                                pos.selection.none = true;
+                                pos.set_selection_none();
                             }
 
-                            match ((f & EventFlags::M_CTRL) == EventFlags::M_CTRL, arrow) {
-                                (false, Arrow::L) => pos.cursor.prev(&active_buffer.content),
-                                (false, Arrow::R) => pos.cursor.next(&active_buffer.content),
-                                (_, Arrow::U) => pos.cursor.up(1, &active_buffer.content),
-                                (_, Arrow::D) => pos.cursor.down(1, &active_buffer.content),
-                                (false, Arrow::End) => pos.cursor.end(&active_buffer.content),
-                                (false, Arrow::Home) => pos.cursor.home(),
-                                (_, Arrow::PU) => pos.cursor.up(app.last_content_rect.height as usize, &active_buffer.content),
-                                (_, Arrow::PD) => pos.cursor.down(app.last_content_rect.height as usize, &active_buffer.content),
-                                (true, Arrow::L) => { pos.cursor.prev_word(&active_buffer.content) },
-                                (true, Arrow::R) => { pos.cursor.next_word(&active_buffer.content) },
-                                (true, Arrow::End) => pos.cursor.ctrl_end(&active_buffer.content),
-                                (true, Arrow::Home) => pos.cursor.ctrl_home(),
+                            match ((e.modifiers & KeyModifiers::CONTROL) == KeyModifiers::CONTROL, arrow) {
+                                (false, Arrow::L) => pos.cursor_prev(&active_buffer.content),
+                                (false, Arrow::R) => pos.cursor_next(&active_buffer.content),
+                                (_, Arrow::U) => pos.cursor_up(1, &active_buffer.content),
+                                (_, Arrow::D) => pos.cursor_down(1, &active_buffer.content),
+                                (false, Arrow::End) => pos.cursor_end(&active_buffer.content),
+                                (false, Arrow::Home) => pos.cursor_home(),
+                                (_, Arrow::PU) => pos.cursor_up(app.last_content_rect.height as usize, &active_buffer.content),
+                                (_, Arrow::PD) => pos.cursor_down(app.last_content_rect.height as usize, &active_buffer.content),
+                                (true, Arrow::L) => { pos.cursor_prev_word(&active_buffer.content) },
+                                (true, Arrow::R) => { pos.cursor_next_word(&active_buffer.content) },
+                                (true, Arrow::End) => pos.cursor_ctrl_end(&active_buffer.content),
+                                (true, Arrow::Home) => pos.cursor_ctrl_home(),
                             }
 
-                            caret.set_position(pos);
+                            unsafe { caret.set_position_unchecked(pos); }
                             caret.merge_sel_pos();
                         }
                         active_buffer.operate_arrow_end(app.last_content_rect);
@@ -183,7 +192,7 @@ impl EditorMode {
                     },
 
                     /// Remove methods
-                    |_, app, e, _f| {
+                    |_, app, e| {
                         match (e.code, e.modifiers) {
                             (KeyCode::Backspace, KeyModifiers::NONE) => {
                                 app.buffers.active_mut().operate_backspace(app.last_content_rect, &mut app.logs); false
@@ -201,7 +210,7 @@ impl EditorMode {
 
 
                     /// Scroll
-                    |_, _, app, e, _f| {
+                    |_, _, app, e| {
                         match e.kind {
                             MouseEventKind::ScrollDown => {
                                 if (e.modifiers & KeyModifiers::SHIFT) == KeyModifiers::SHIFT {
@@ -227,7 +236,7 @@ impl EditorMode {
                         }
                     },
 
-                    |_, _, app, e, _f| {
+                    |_, _, app, e| {
                         const SHIFT_ALT: KeyModifiers = KeyModifiers::SHIFT.union(KeyModifiers::ALT);
 
                         match (e.kind, e.modifiers) {
@@ -249,7 +258,7 @@ impl EditorMode {
                     }
                 ],
                 vec![
-                    |_, app, e, _f| {
+                    |_, app, e| {
                         app.buffers.active_mut().operate_double_click(e.column, e.row, app.last_content_rect, &mut app.logs); false
                     }
                 ]

@@ -1,6 +1,6 @@
 use crate::assets::colors::colors::{C_MENU_BG, C_MENU_FG};
 use crate::backend::buffers::Buffers;
-use crate::backend::event_handler::{EventFlags, EventHandler};
+use crate::backend::event_handler::EventHandler;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
 use crate::App;
@@ -20,11 +20,11 @@ pub struct MenuMode {
 pub struct MenuCommand {
     text: Cow<'static, str>,
     shortcut_symbol: Cow<'static, str>,
-    handler: Option<(KeyCode, KeyModifiers, fn(&mut App, &KeyEvent, EventFlags))>,
+    handler: Option<(KeyCode, KeyModifiers, fn(&mut App, &KeyEvent))>,
 }
 
 impl MenuCommand {
-    fn new(text: Cow<'static, str>, shortcut_symbol: Cow<'static, str>, handler: Option<(KeyCode, KeyModifiers, fn(&mut App, &KeyEvent, EventFlags))>) -> Self {
+    fn new(text: Cow<'static, str>, shortcut_symbol: Cow<'static, str>, handler: Option<(KeyCode, KeyModifiers, fn(&mut App, &KeyEvent))>) -> Self {
         Self {
             text,
             shortcut_symbol,
@@ -88,12 +88,12 @@ impl MenuMode {
         Self {
             event_handler: EventHandler::new(
                 vec![
-                    |a, app, e, f| {
+                    |a, app, e| {
                         app.change_mode = Some(Box::new(EditorMode::new()));
                         for c in a {
                             if let Some((kc, m, handler)) = c.handler {
                                 if kc == e.code && m == e.modifiers {
-                                    handler(app, e, f);
+                                    handler(app, e);
                                     return false;
                                 }
                             }

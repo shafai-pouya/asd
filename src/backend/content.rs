@@ -1,50 +1,30 @@
-use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
+use crate::assets::constants::DURATION_SMALL_TIMER;
 use crate::backend::caret::{Carets, CursorEditor};
-use crate::backend::checkpoint::checkpoints::{Checkpoints, DURATION_SMALL_TIMER};
+use crate::backend::checkpoint::checkpoints::Checkpoints;
 use crate::backend::cursor::Cursor;
+use crate::backend::display_string::{DisplaySlice, DisplayString};
 use crate::backend::little_string::LittleString;
 use crate::backend::mostly_one_vec::MostlyOneVec;
-use crate::ui::log::Log;
-use libc::{access, W_OK, X_OK};
-use std::ffi::CString;
-use std::fmt::Display;
-use std::fs;
-use std::fs::File;
 use std::ops::{Index, Range};
-use std::path::Path;
 use std::time::Instant;
 
-#[derive(Default, Debug, Clone, Copy)]
-pub enum LineEnding {
-    CR,
-    LF,
-    #[default]
-    CRLF,
-}
-
-impl LineEnding {
-    pub(crate) fn get(&self) -> &[u8] {
-        match self {
-            LineEnding::CR => b"\r",
-            LineEnding::LF => b"\n",
-            LineEnding::CRLF => b"\r\n",
+pub(crate) fn whitespaces_in_the_start_of_the_line(s: &DisplayString) -> &DisplaySlice {
+    let mut idx = 0;
+    for c in s.iter() {
+        if !c.is_whitespace() {
+            break;
         }
+        idx += 1;
     }
-}
 
-
-pub(crate) fn whitespaces_in_the_start_of_the_line(s: &str) -> &str {
-    let end = s.find(|c: char| !c.is_whitespace())
-        .unwrap_or(s.len());
-
-    &s[..end]
+    &s[..idx]
 }
 pub struct Content {
-    lines: Vec<String>,
+    lines: Vec<DisplayString>,
 }
 
 impl Index<usize> for Content {
-    type Output = String;
+    type Output = DisplayString;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.lines[index]
@@ -53,125 +33,37 @@ impl Index<usize> for Content {
 
 
 impl Content {
-}
-
-impl Content {
-    pub(crate) fn from_file(path: &Path, logs: &mut Vec<Log>) -> (Self, LineEnding) {
-        let content;
-        // let mut logs = Vec::new();
-        match fs::exists(path) {
-            Err(e) => {
-                logs.push(Log {
-                    message: format!("[E:{}] Error checking existence of the file: {}", e.kind() as u32, e.kind().to_string()),
-                    color: C_LOG_ERROR,
-                    handler: None,
-                });
-                content = String::new();
-            }
-            Ok(false) => {
-                logs.push(Log {
-                    message: "[I] Created new file".to_string(), // todo: maybe couldn't
-                    color: C_LOG_INFO,
-                    handler: None,
-                });
-                content = String::new();
-                {
-                    let parent = CString::new(path.parent().unwrap().to_str().unwrap().to_string().as_bytes()).unwrap(); // Shouldn't fail I think
-                    let result = unsafe { access(parent.as_ptr(), W_OK | X_OK) };
-                    drop(parent);
-                    if result != 0 {
-                        logs.push(Log {
-                            message: "[W] Warning: You will fail to save the file, I think...".to_string(), // todo: maybe couldn't
-                            color: C_LOG_WARNING,
-                            handler: None,
-                        });
-                    }
-                }
-            }
-            Ok(true) => {
-                match fs::read_to_string(path) {
-                    Ok(c) => {
-                        content = c;
-                        match File::options().append(true).open(path) {
-                            Ok(f) => drop(f),
-                            Err(e) => {
-                                logs.push(Log {
-                                    message: format!("[E:{}] Error Opening File for in append mode: {}", e.kind() as u32, e.kind().to_string()),
-                                    color: C_LOG_ERROR,
-                                    handler: None,
-                                });
-                                logs.push(Log {
-                                    message: "[I] It means the file is readonly!".to_string(),
-                                    color: C_LOG_INFO,
-                                    handler: None,
-                                });
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        logs.push(Log {
-                            message: format!("[E:{}] Error Opening File for the first time: {}", e.kind() as u32, e.kind().to_string()),
-                            color: C_LOG_ERROR,
-                            handler: None,
-                        });
-                        content = String::new();
-                    }
-                }
-            }
-        }
-        Self::from_str(&content)
-    }
-    
-    pub(crate) fn from_str(content: &str) -> (Self, LineEnding) {
-        let mut lines = vec![String::new()];
-        let mut line_ending = None;
-        let mut chars = content.chars().peekable().into_iter();
-        while let Some(ch) = chars.next() {
-            if ch == '\n' {
-                line_ending.get_or_insert(LineEnding::LF);
-                lines.push(String::new());
-            } else if ch == '\r' {
-                lines.push(String::new());
-                if chars.peek() == Some(&'\n') {
-                    chars.next();
-                    line_ending.get_or_insert(LineEnding::CRLF);
-                } else {
-                    line_ending.get_or_insert(LineEnding::CR);
-                }
-            } else {
-                lines.last_mut().unwrap().push(ch); // It's Ok
-            }
-        }
-
-        (Self { lines }, line_ending.unwrap_or(LineEnding::CRLF))
-    }
-
     #[inline]
-    pub(crate) fn reserve_at_line(&mut self, line: usize, cap: usize) {
+    pub(crate) fn reserve_gms_at_line(&mut self, line: usize, cap: usize) {
         self.lines[line].reserve(cap);
     }
 
     #[inline]
-    pub(crate) fn len(&self) -> usize {
-        self.lines.len()
+    pub(crate) fn from_lines(lines: Vec<DisplayString>) -> Self {
+        Content { lines }
     }
 
     #[inline]
-    pub(crate) fn get(&self, i: Range<usize>) -> Option<&[String]> {
+    pub(crate) fn get(&self, i: Range<usize>) -> Option<&[DisplayString]> {
         self.lines.get(i)
+    }
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        self.lines.len()
     }
     
     pub(crate) fn get_max_line_length(&self) -> usize {
         self.lines.iter().map(|l| l.len()).max().unwrap() // Ok
     }
 
-    pub(crate) fn replace_text(&mut self, checkpoints: &mut Checkpoints, carets: &mut CursorEditor, new_text: &MostlyOneVec<LittleString>) {
+    /// Safety: Make sure the encoding is correct
+    pub(crate) unsafe fn replace_text(&mut self, checkpoints: &mut Checkpoints, carets: &mut CursorEditor, new_text: MostlyOneVec<LittleString>) {
         let caret_ptr = &mut carets.cursors.carets[carets.cursor];
         let new_text_lines_n = new_text.len();
         if caret_ptr.is_selection_none() {
             unsafe {
-                let pos_ptr = caret_ptr.get_position_mut();
-                pos_ptr.selection.line = pos_ptr.cursor.line;
+                let pos_ptr = caret_ptr.get_position_mut_unchecked();
+                pos_ptr.set_cursor_line_into_selection_line();
             }
         }
         let pos_ptr = caret_ptr.get_position();
@@ -180,7 +72,7 @@ impl Content {
 
         // Do checkpoints:
         caret_ptr.start_checkpoint();
-        let forward = caret_ptr.get_position().selection.get_lc() > caret_ptr.get_position().cursor.get_lc();
+        let forward = caret_ptr.get_position().selection().get_lc() > caret_ptr.get_position().cursor().get_lc();
         let mut skip = if !forward { caret_ptr.added_len } else { 0 };
         if caret_ptr.removed_text.is_empty() {
             caret_ptr.removed_text.push(LittleString::empty());
@@ -199,15 +91,19 @@ impl Content {
             };
 
             if forward {
-                for ch in part.as_bytes() {
+                for &ch in part {
                     if skip > 0 { skip -= 1; } else {
-                        caret_ptr.removed_text.last_mut().unwrap().push(*ch as char); // It's Ok
+                        unsafe {
+                            caret_ptr.removed_text.last_mut().unwrap().push(ch); // It's Ok
+                        } // Safety: the caller
                     }
                 }
             } else {
-                for ch in part.as_bytes().iter().rev() {
+                for ch in part.iter().rev() {
                     if skip > 0 { skip -= 1; } else {
-                        caret_ptr.removed_text[0].insert(0, *ch);
+                        unsafe {
+                            caret_ptr.removed_text[0].insert(0, *ch);
+                        } // Safety: the caller
                     }
                 }
             }
@@ -229,19 +125,17 @@ impl Content {
 
         unsafe { self.replace_text_without_checkpoints(carets, new_text); } // Safety: I did operate checkpoints by myself
 
-        checkpoints.little_timer_deadline = Some(Instant::now() + DURATION_SMALL_TIMER);
-
-        // // todo: remove this line:
-        // let mut f = File::options().write(true).open("/dev/tty2").unwrap();
-        // write!(f, "Added: {}\nRemoved: {:?}\n", carets.cursors.carets[carets.cursor].added_len, carets.cursors.carets[carets.cursor].removed_text).unwrap();
+        checkpoints.little_timer_deadline = Some(Instant::now() + DURATION_SMALL_TIMER); 
     }
 
-    pub(crate) unsafe fn replace_text_without_checkpoints(&mut self, carets: &mut CursorEditor, new_text: &MostlyOneVec<LittleString>) {
+    /// Safety: Make sure the encoding is correct, and make sure you don't want to apply it to the
+    /// checkpoints, and you have commited checkpoints before
+    pub(crate) unsafe fn replace_text_without_checkpoints(&mut self, carets: &mut CursorEditor, new_text: MostlyOneVec<LittleString>) {
         let caret_ptr = &mut carets.cursors.carets[carets.cursor];
         if caret_ptr.is_selection_none() {
             unsafe {
-                let pos_ptr = caret_ptr.get_position_mut();
-                pos_ptr.selection.line = pos_ptr.cursor.line;
+                let pos_ptr = caret_ptr.get_position_mut_unchecked();
+                pos_ptr.set_cursor_line_into_selection_line()
             }
         }
         let new_text_lines_n = new_text.len();
@@ -258,9 +152,9 @@ impl Content {
             (0, 1) |
             (1, 0) |
             (1, 1) => {
-                self.lines[pos_ptr.cursor.line].replace_range(
+                self.lines[pos_ptr.cursor().line].replace_range(
                     min.1..max.1,
-                    new_text.get(0).map(LittleString::as_str).unwrap_or("")
+                    new_text.into_iter().next().unwrap_or(LittleString::empty())
                 );
             }
             (0, _) |
@@ -269,39 +163,47 @@ impl Content {
                     .drain(min.0 + 1..max.0 + 1).last().unwrap(); // We checked the len in the match case
 
                 self.lines[min.0].truncate(min.1);
-                self.lines[min.0].push_str(new_text.get(0).map(LittleString::as_str).unwrap_or(""));
-                self.lines[min.0].push_str(&last_line[max.1..]);
+                unsafe {
+                    self.lines[min.0].push_slice(new_text.get(0).map(AsRef::as_ref).unwrap_or(Default::default()));
+                    self.lines[min.0].push_slice(&last_line[max.1..]);
+                } // Safety: The caller
             }
             (_, 0) |
             (_, 1) => {
-                let mut new_text = new_text.iter();
+                let mut new_text = new_text.into_iter();
                 let first_new_line = new_text.next().unwrap(); // We checked the length in the match case
                 self.lines.splice(
-                    min.0+1..min.0+1,
-                    new_text.map(LittleString::to_string_clone)
+                    min.0 + 1..min.0 + 1,
+                    new_text.map(LittleString::into_dstring)
                 );
                 let dst = min.0 + new_text_lines_n - 1;
                 let (left, right) = self.lines.split_at_mut(dst);
-                right[0].push_str(&left[min.0][min.1..]);
-                self.lines[min.0].truncate(min.1);
-                self.lines[min.0].push_str(first_new_line.as_str());
+                unsafe {
+                    right[0].push_slice(&left[min.0][min.1..]);
+                    self.lines[min.0].truncate(min.1);
+                    self.lines[min.0].push_slice(first_new_line.as_ref());
+                } // Safety: The caller
             }
             (_, _) => {
-                let last_line = self.lines.splice(
+                let mut new_text = new_text.into_iter();
+                let first_new_line = new_text.next().unwrap();
+                let last_old_line = self.lines.splice(
                     min.0 + 1..max.0 + 1,
-                    new_text.iter().skip(1).map(LittleString::to_string_clone)
+                    new_text.map(LittleString::into_dstring)
                 ).last().unwrap(); // We checked the len
                 self.lines[min.0].truncate(min.1);
-                self.lines[min.0].push_str(new_text[0].as_str());
-                self.lines[min.0 + new_text_lines_n - 1].push_str(&last_line[max.1..]);
+                unsafe {
+                    self.lines[min.0].push_slice(first_new_line.as_ref());
+                    self.lines[min.0 + new_text_lines_n - 1].push_slice(&last_old_line[max.1..]);
+                } // Safety: The caller
             }
         }
-
+        
         unsafe {
-            let pos_ptr = carets.cursors.carets[carets.cursor].get_position_mut();
-            if pos_ptr.selection.none == false {
-                pos_ptr.cursor = Cursor::new(max.0, max.1);
-                pos_ptr.selection.none = true;
+            let pos_ptr = carets.cursors.carets[carets.cursor].get_position_mut_unchecked();
+            if !pos_ptr.is_selection_none() {
+                pos_ptr.set_selection_none();
+                pos_ptr.set_cursor_unchecked(Cursor::new(max.0, max.1));
             }
         }
 
@@ -313,59 +215,26 @@ impl Content {
         );
     }
 
-    pub(crate) fn get_lines(&self) -> &Vec<String> {
+    pub(crate) fn get_lines(&self) -> &Vec<DisplayString> {
         &self.lines
     }
+    
 
-    pub(crate) fn get_selected_texts(&self, cursors: &Carets, line_ending: LineEnding) -> Vec<String> {
-        let mut texts = vec![];
-        for i in 0..cursors.carets.len() {
+    /// Safety: Make sure the encoding is correct
+    pub(crate) unsafe fn get_selected_texts_to_copy(&self, cursors: &Carets) -> MostlyOneVec<MostlyOneVec<LittleString>> {
+        (0..cursors.carets.len()).map(|i| {
             let min = cursors.carets[i].get_position().get_min();
             let max = cursors.carets[i].get_position().get_max(false);
-            let mut text = String::new();
-            if min.0 == max.0 {
-                text.push_str(&self.lines[min.0][min.1..max.1]);
-            } else {
-                text.push_str(&self.lines[min.0][min.1..]);
-                text.push_str(&str::from_utf8(line_ending.get()).unwrap());
-                for line in min.0 + 1..max.0 {
-                    text.push_str(&self.lines[line]);
-                    text.push_str(&str::from_utf8(line_ending.get()).unwrap());
-                }
-                text.push_str(&self.lines[max.0][..max.1]);
-            }
-            texts.push(text);
-        }
-        texts
-    }
-
-    pub(crate) fn get_copyable_text(&self, cursors: &Carets, line_ending: LineEnding) -> String {
-        let texts = self.get_selected_texts(cursors, line_ending);
-        if !(1..texts.len()).all(|i| texts[i] == texts[i - 1]) {
-            let mut joined_text = String::with_capacity(
-                line_ending.get().len() * (texts.len() - 1)
-                + texts.iter().map(|t| t.len()).sum::<usize>()
-            );
-            let mut iter = texts.into_iter();
-            joined_text.push_str(&iter.next().unwrap()); // There is at least one line
-            for s in iter {
-                joined_text.push_str(str::from_utf8(line_ending.get()).unwrap());
-                joined_text.push_str(&s);
-            }
-            joined_text
-        } else {
-            texts.into_iter().next().unwrap_or(String::new())
-        }
-    }
-
-}
-
-impl Display for LineEnding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LineEnding::CR => write!(f, "CR"),
-            LineEnding::LF => write!(f, "LF"),
-            LineEnding::CRLF => write!(f, "CRLF"),
-        }
+            let this_cursor = (min.0..=max.0).map(|j| {
+                let part = match (j == min.0, j == max.0) {
+                    (true, true) => LittleString::from_slice(&self.lines[j][min.1..max.1]),
+                    (true, false) => LittleString::from_slice(&self.lines[j][min.1..]),
+                    (false, true) => LittleString::from_slice(&self.lines[j][..max.1]),
+                    (false, false) => LittleString::from_slice(&self.lines[j]),
+                };
+                part
+            }).collect::<MostlyOneVec<_>>();
+            this_cursor
+        }).collect()
     }
 }
