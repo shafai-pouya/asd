@@ -148,15 +148,19 @@ impl DisplayChar {
                 let c = grapheme.chars().next().unwrap() as u32;
                 Self::from_u8_checked(c, string)
             } else {
-                let mut list_lock = NORMAL_LIST.lock().unwrap();
-                let idx = list_lock.len() as u32;
-                list_lock.push(LittleStringUni::new(grapheme)); // todo: I know it has memory leak. I may fix it later...
-                let value = idx | 0x8000_0000u32;
                 unsafe {
-                    string.push(Self(value))
+                    string.push(Self::from_lsu(LittleStringUni::new(grapheme)))
                 }
             }
         }
+    }
+    
+    pub(crate) fn from_lsu(lsu: LittleStringUni) -> Self {
+        let mut list_lock = NORMAL_LIST.lock().unwrap();
+        let idx = list_lock.len() as u32;
+        list_lock.push(lsu); // todo: I know it has memory leak. I may fix it later...
+        let value = idx | 0x8000_0000u32;
+        Self(value)
     }
 
     /// Safety: Make sure the encoding is correct, and you give it the correct [idx/4]

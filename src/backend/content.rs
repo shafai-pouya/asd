@@ -7,6 +7,7 @@ use crate::backend::little_string::LittleString;
 use crate::backend::mostly_one_vec::MostlyOneVec;
 use std::ops::{Index, Range};
 use std::time::Instant;
+use crate::backend::display_char::DisplayChar;
 
 pub(crate) fn whitespaces_in_the_start_of_the_line(s: &DisplayString) -> &DisplaySlice {
     let mut idx = 0;
@@ -55,6 +56,12 @@ impl Content {
     pub(crate) fn get_max_line_length(&self) -> usize {
         self.lines.iter().map(|l| l.len()).max().unwrap() // Ok
     }
+
+    #[inline]
+    pub(crate) fn replace_g(&mut self, line: usize, col: usize, char: DisplayChar) {
+        self.lines[line][col] = char;
+    }
+
 
     /// Safety: Make sure the encoding is correct
     pub(crate) unsafe fn replace_text(&mut self, checkpoints: &mut Checkpoints, carets: &mut CursorEditor, new_text: MostlyOneVec<LittleString>) {
@@ -125,7 +132,7 @@ impl Content {
 
         unsafe { self.replace_text_without_checkpoints(carets, new_text); } // Safety: I did operate checkpoints by myself
 
-        checkpoints.little_timer_deadline = Some(Instant::now() + DURATION_SMALL_TIMER); 
+        checkpoints.little_timer_deadline = Some(Instant::now() + DURATION_SMALL_TIMER);
     }
 
     /// Safety: Make sure the encoding is correct, and make sure you don't want to apply it to the
@@ -198,7 +205,7 @@ impl Content {
                 } // Safety: The caller
             }
         }
-        
+
         unsafe {
             let pos_ptr = carets.cursors.carets[carets.cursor].get_position_mut_unchecked();
             if !pos_ptr.is_selection_none() {

@@ -6,7 +6,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use std::io::{Error, Write};
-use std::ops::{Deref, Index, Range, RangeFrom, RangeTo};
+use std::ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeTo};
 use std::slice::SliceIndex;
 use std::vec::Splice;
 use std::{slice, vec};
@@ -22,6 +22,12 @@ impl Index<usize> for DisplayString {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.gms[index]
+    }
+}
+
+impl IndexMut<usize> for DisplayString {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.gms.index_mut(index)
     }
 }
 

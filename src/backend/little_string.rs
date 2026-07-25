@@ -75,32 +75,40 @@ impl LittleString {
             }
         }
     }
-    
+
     pub(crate) fn len(&self) -> usize {
         match self {
             LittleString::Little((len, _data)) => *len as usize,
             LittleString::Big(s) => s.len()
         }
     }
-    
+
+    pub(crate) fn from_raw(bytes: &[u8]) -> Self {
+        let mut s = DisplayString::empty();
+        for &b in bytes {
+            DisplayChar::from_u8_checked(b as u32, &mut s)
+        }
+        Self::Big(s)
+    }
+
     pub(crate) fn encoding_change(&self, src: Encoding, dst: Encoding) -> Self {
-        match (src, dst) { 
-            (Encoding::UTF8(_), Encoding::UTF8(_)) => self.clone(), 
+        match (src, dst) {
+            (Encoding::UTF8(_), Encoding::UTF8(_)) => self.clone(),
             (Encoding::UTF8(_), Encoding::Raw    ) => {
                 let mut new = DisplayString::with_capacity(self.len());
                 for i in self.iter() {
                     unsafe { i.utf8_to_raw(&mut new); } // Safety: We checked the encoding and it was utf8
                 }
                 Self::Big(new)
-            }, 
+            },
             (Encoding::Raw    , Encoding::UTF8(_)) => {
                 let mut new = DisplayString::with_capacity(self.len());
                 for i in self.iter() {
                     unsafe { i.raw_to_utf8(&mut new); } // Safety: We checked the encoding and it was utf8
                 }
                 Self::Big(new)
-            }, 
-            (Encoding::Raw    , Encoding::Raw    ) => self.clone(), 
+            },
+            (Encoding::Raw    , Encoding::Raw    ) => self.clone(),
         }
     }
 

@@ -4,12 +4,16 @@ use crate::backend::caret::{Caret, CursorEditor, Position};
 use crate::backend::content::whitespaces_in_the_start_of_the_line;
 use crate::backend::cursor::Cursor;
 use crate::backend::display_char::DisplayChar;
-use crate::backend::little_string::LittleString;
+use crate::backend::display_string::DisplayString;
+use crate::backend::encoding::Encoding;
+use crate::backend::little_string::{LittleString, LittleStringUni};
 use crate::backend::selection::Selection;
 use crate::edit_operators::EditOperators;
 use crate::ui::log::Log;
 use crate::{movec, Clipboard};
 use ratatui::layout::Rect;
+use std::io::Write;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// This trait made to be implemented for only one struct. It made
 /// to implement some functions in another file, for readability, 
@@ -48,7 +52,44 @@ impl EditController for Buffer {
         for caret_idx in 0..self.carets.carets.len() {
             let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
             unsafe {
-                self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(LittleString::from_one_cell_utf8_char_unchecked(ch)))
+                let ls = match self.encoding {
+                    Encoding::UTF8(_) => {
+                        let min = cursor_editor.cursors.carets[cursor_editor.cursor].get_position().get_min();
+                        if min.1 == 0 {
+                            let mut s = DisplayString::empty();
+                            DisplayChar::from_utf8_grapheme_to_dstring(ch.encode_utf8(&mut [0; 4]), &mut s);
+                            LittleString::Big(s)
+                        } else {
+                            struct S(String);
+                            impl Write for S {
+                                fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                                    self.0.push_str(str::from_utf8(buf).unwrap());
+                                    Ok(buf.len())
+                                }
+
+                                fn flush(&mut self) -> std::io::Result<()> {
+                                    Ok(())
+                                }
+                            }
+                            let mut s = S(String::new());
+                            self.content[min.0][min.1 - 1].utf8__write_to(&mut s).unwrap();
+                            s.0.push(ch);
+                            let mut g = s.0.graphemes(true);
+                            let _ = g.next();
+                            if g.next().is_some() {
+                                LittleString::from_one_cell_utf8_char_unchecked(ch)
+                            } else {
+                                let lsu = LittleStringUni::new(&s.0);
+                                self.content.replace_g(min.0, min.1 - 1, DisplayChar::from_lsu(lsu));
+                                continue;
+                            }
+                        }
+                    }
+                    Encoding::Raw => {
+                        LittleString::from_raw(ch.encode_utf8(&mut [0; 4]).as_bytes())
+                    }
+                };
+                self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(ls))
             } // todo: maybe it isn't one cell or doesn't match the encoding
         }
         self.buffer_modified();
