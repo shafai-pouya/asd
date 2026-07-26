@@ -80,8 +80,14 @@ impl EditController for Buffer {
                                 LittleString::from_one_cell_utf8_char_unchecked(ch)
                             } else {
                                 let lsu = LittleStringUni::new(&s.0);
-                                self.content.replace_g(min.0, min.1 - 1, DisplayChar::from_lsu(lsu));
-                                continue;
+                                let mut ls = LittleString::empty();
+                                ls.push(DisplayChar::from_lsu(lsu));
+                                cursor_editor.cursors.carets[cursor_editor.cursor]
+                                    .get_position_mut_unchecked()
+                                    .set_min(
+                                        (min.0, min.1 - 1)
+                                    );
+                                ls
                             }
                         }
                     }

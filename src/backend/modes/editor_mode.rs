@@ -160,7 +160,7 @@ impl EditorMode {
                         for caret in active_buffer.carets.carets.iter_mut() {
                             let mut pos = *caret.get_position();
 
-                            if (e.modifiers & KeyModifiers::SHIFT) == KeyModifiers::SHIFT {
+                            if (e.modifiers & KeyModifiers::SHIFT) != KeyModifiers::empty() {
                                 if pos.is_selection_none() {
                                     pos.set_selection_to_cursor();
                                 }

@@ -7,7 +7,6 @@ use crate::backend::little_string::LittleString;
 use crate::backend::mostly_one_vec::MostlyOneVec;
 use std::ops::{Index, Range};
 use std::time::Instant;
-use crate::backend::display_char::DisplayChar;
 
 pub(crate) fn whitespaces_in_the_start_of_the_line(s: &DisplayString) -> &DisplaySlice {
     let mut idx = 0;
@@ -55,11 +54,6 @@ impl Content {
     
     pub(crate) fn get_max_line_length(&self) -> usize {
         self.lines.iter().map(|l| l.len()).max().unwrap() // Ok
-    }
-
-    #[inline]
-    pub(crate) fn replace_g(&mut self, line: usize, col: usize, char: DisplayChar) {
-        self.lines[line][col] = char;
     }
 
 
@@ -186,7 +180,7 @@ impl Content {
                 let dst = min.0 + new_text_lines_n - 1;
                 let (left, right) = self.lines.split_at_mut(dst);
                 unsafe {
-                    right[0].push_slice(&left[min.0][min.1..]);
+                    right[0].push_slice(&left[min.0][max.1..]);
                     self.lines[min.0].truncate(min.1);
                     self.lines[min.0].push_slice(first_new_line.as_ref());
                 } // Safety: The caller

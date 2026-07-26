@@ -53,6 +53,8 @@ pub struct Caret {
 impl Caret {
     pub(crate) fn start_checkpoint(&mut self) {
         if self.started { return; }
+        assert_eq!(self.added_len, 0);
+        assert_eq!(self.removed_text.len(), 0);
         self.started = true;
         self.added_len = 0;
         self.removed_text = movec!();
