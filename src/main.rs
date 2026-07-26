@@ -1,5 +1,3 @@
-extern crate core;
-
 mod assets;
 mod ui;
 mod backend;

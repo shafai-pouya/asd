@@ -37,8 +37,8 @@ pub mod colors {
     pub static C_FG_SCROLLBAR: Color = C_FG_LINE_NUMBERS;
     
     
-    pub static C_MENU_FG: Color = Color::Black;
-    pub static C_MENU_BG: Color = Color::LightRed;
+    pub static C_MENU_FG: Color = C_FG_BAR;
+    pub static C_MENU_BG: Color = C_BG_BAR;
 
 
     pub static C_BG_NORMAL: Color = Color::Rgb(59, 34, 76);
