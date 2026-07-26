@@ -1,5 +1,245 @@
-This is the help text :)
+Welcome to asd!
 
-I will fill this text in future versions.
+This short guide will teach you the basics of asd.
+You can repeat every exercise as many times as you like.
+You can leave this guide at any time and come back later.
 
-TODO
+
+Conventions
+───────────
+
+Exercises begin with "Try it:".
+
+Tips provide extra information, but you can safely skip them.
+────────────────────────────────────────────────────────
+
+
+=========================================================================================
+Mouse actions
+─────────────
+
+Mouse wheel       Scroll vertically
+Shift + wheel     Scroll horizontally
+Click             Move the cursor
+Drag              Select text
+
+Try it:
+1) Scroll down until you reach "Good Job".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Good Job
+2) Scroll horizontally to see "Good Job":     ====>                                                                                                                                                                                                 Good Job
+3) Select "This text" with your mouse.
+
+Tip:
+When you select text, its color changes to the selection-color (purple by default). You'll also
+see the selection-cursor-color (pink by default). The selection cursor appears either on the first
+selected character or just after the last selected character, depending on the direction in which
+the selection was made.
+
+
+=========================================================================================
+Moving around
+─────────────
+
+← → ↑ ↓                Move the cursor
+Home / End             Move to the beginning/end of the line
+Page Up / Page Down    Scroll one page
+
+Try it:
+1) Move the cursor to each arrow below, using only the keyboard.
+
+◀────      ◀────      ────▶
+
+Tip:
+I think you see wierd changing symbols after "◀" or "▶". It's a bug. An emoji bug. I'll fix it later
+
+=========================================================================================
+Editing
+───────
+
+Any character key (Shift for uppercase or alternate characters)    Insert the character at the cursor
+Backspace                                                          Remove the character before the cursor, or the selection
+Delete                                                             Remove the character after the cursor, or the selection
+Tab                                                                Move to the next tab stop (every 4 columns), inserting spaces
+Enter                                                              Start a new line
+
+Try it:
+1) Replace your name with "HERE": HERE
+2) Edit the text below so it matches the target.
+
+Text:
+The quick
+ brown fox jumps over the lazy doggy!
+
+Target:
+The quick brown cat
+jumped over the lazy dog
+
+
+Tip:
+The text cursor is always immediately before the selection cursor (pink by default). Any text you type is inserted
+at the text cursor.
+
+
+
+
+=========================================================================================
+Advanced cursor movement and selection
+──────────────────────────────────────
+
+Ctrl+← →               Move by a word
+Shift+← →              Increase the selection
+Ctrl+Shift+← →         Increase the selection by a word
+
+Try it:
+1) Use Ctrl and Shift to quickly select and delete the UPPERCASE WORDS. Use Ctrl to increase the speed
+Lorem ipsum dolor sit amet consectetur adipiscing elit quisque faucibus ex sapien vitae pellentesque sem placerat
+in id cursus mi PRETIUM TELLUS DUIS convallis TMEPUS LEO EU aenean sed diam urna tempor pulvinar vivamus fringilla
+lacus nec metus.
+
+
+=========================================================================================
+Clipboard
+─────────
+
+Ctrl+C      Copy
+Ctrl+X      Cut
+Ctrl+V      Paste
+
+# Tip:
+This version uses an internal clipboard. You can't copy or paste text between asd and other applications.
+
+Try it:
+1) Copy "very" and paste it after "is".
+   Copy "hot" and paste it after "was".
+
+This text is ### important. It was ###.
+
+
+
+
+=========================================================================================
+Undo / Redo
+───────────
+
+Ctrl+Z        Undo
+Ctrl+Shift+Z  Redo
+
+Try it:
+1) Undo everything you changed, then redo it.
+
+
+=========================================================================================
+Working with asd in the terminal
+────────────────────────────────
+
+asd --help          Open this guide
+asd /path/to/file   Open a file
+asd /path/to/dir    Open the file tree (unstable, not suggested)
+
+
+# Tip:
+File tree is kinda unstable now, and we suggest you to don't use it. However, if you pass a directory path instead of
+a file path when you are opening asd, you'll get an unstable file tree
+
+
+=========================================================================================
+File actions
+────────────
+
+Ctrl+S           Save the buffer
+Ctrl+Alt+S       Save the buffer as
+Ctrl+Q           Quit the editor
+Ctrl+Alt+Q       Quit even if there are unsaved buffers.
+
+
+
+
+=========================================================================================
+Menu
+────
+
+Press Escape to open the menu.
+
+The menu is still under development, so there's nothing to do here yet.
+
+
+
+=========================================================================================
+Multiple cursors
+────────────────
+
+
+Ctrl+Click       Adds or removes a cursor
+Shift+Alt+Drag   Selects a rectangle and leaves a cursor on each line
+
+
+Try it:
+1) Edit every line so it becomes: "Hello, World" (You may need to use Ctrl+Shift+arrow keys to do it with one
+multi-cursor selection):
+
+Hello, myself
+Bye, myself
+Goodbye, myself
+Eat, myself
+Play, myself
+Listen, myself
+
+2) Add an aligned ";" on this col in each line:                   ";"
+a = 1
+self.editor.buffer[self.cursor.line][self.cursor.col] = 0
+self.buffers.commit("undo", "redo")
+println!("Bro, Why are you doing this exercise?")
+
+
+
+
+
+=========================================================================================
+Congratulations!
+
+You now know enough to start using asd.
+
+Type "asd --help" whenever you need help.
