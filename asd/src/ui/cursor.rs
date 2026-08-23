@@ -31,9 +31,9 @@ impl TerminalCursor {
     pub(crate) fn render2(&self, terminal: &mut DefaultTerminal) {
         if self.render_cursor_showing {
             if self.cursor_showing {
-                terminal.show_cursor().unwrap(); // We can't do anything about it
+                terminal.show_cursor().unwrap();
             } else {
-                terminal.hide_cursor().unwrap(); // We can't do anything about it
+                terminal.hide_cursor().unwrap();
             }
         }
     }
@@ -43,7 +43,7 @@ impl TerminalCursor {
             x: u16::MAX,
             y: u16::MAX,
             cursor_showing: true,
-            render_cursor_showing: false,
+            render_cursor_showing: true,
         }
     }
 

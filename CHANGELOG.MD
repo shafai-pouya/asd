@@ -19,3 +19,15 @@ Initial release
 - Clock in the status bar
 - Scrolling
 - Emoji showing (buggy, but usually works well)
+
+## 1.0.1
+
+Bug Fix
+
+### Bug fixes:
+
+- Terminal cursor wasn't showing in the startup.
+
+### Changes:
+
+- Moved the main code to `asd` directory for future compatibilities.

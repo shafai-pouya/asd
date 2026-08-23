@@ -63,7 +63,8 @@ pub struct App {
 
 
     pub virtual_inode_counter: usize,
-    
+
+    // todo: Make system-wise clipboard
     pub internal_clipboard: Clipboard,
 }
 
@@ -73,18 +74,18 @@ impl App {
     #[inline]
     fn no_file() -> Self {
         // todo: change this function
-        let _ = execute!(
-            std::io::stdout(),
-            DisableMouseCapture,
-            SetForegroundColor(crossterm::style::Color::Red),
-        );
-        eprint!("Use the following syntax:\n $ asd /path/to/file/or/dir\n");
-        let _ = execute!(
-            std::io::stdout(),
-            ResetColor,
-        );
-        std::process::exit(1);
-        // Self::file("/tmp/test")
+        // let _ = execute!(
+        //     std::io::stdout(),
+        //     DisableMouseCapture,
+        //     SetForegroundColor(crossterm::style::Color::Red),
+        // );
+        // eprint!("Use the following syntax:\n $ asd /path/to/file/or/dir\n");
+        // let _ = execute!(
+        //     std::io::stdout(),
+        //     ResetColor,
+        // );
+        // std::process::exit(1);
+        Self::file("/tmp/test")
     }
 
     #[inline]
@@ -176,7 +177,7 @@ impl App {
         let mut emoji_queue = vec![];
         terminal.draw(|frame| {
             emoji_queue = self.render(frame, mode);
-        }).unwrap();  // I can't do anything. I let it crash
+        }).unwrap();
         self.terminal_cursor.render_emoji_queue(emoji_queue);
         self.terminal_cursor.render1();
         self.terminal_cursor.render2(terminal);
@@ -184,8 +185,8 @@ impl App {
 
     #[inline]
     fn handle_events(&mut self, mode: &mut Box<dyn Mode>) {
-        if event::poll(POLL_DURATION).unwrap() {  // I can't do anything. I let it crash
-            self.handle_event(mode, event::read().unwrap()); // I can't do anything. I let it crash
+        if event::poll(POLL_DURATION).unwrap() {
+            self.handle_event(mode, event::read().unwrap());
         }
     }
 
@@ -272,7 +273,6 @@ impl App {
 }
 
 fn main() {
-
     // The code in the following unsafe block only wrote because of some editor problems when
     // rendering tui and handling events. So, it opens the editor on another terminal
     #[cfg(debug_assertions)]
@@ -280,7 +280,7 @@ fn main() {
         let file = OpenOptions::new()
            .read(true)
            .write(true)
-           .open("/dev/pts/4")
+           .open("/dev/pts/36")
             .unwrap();
 
 
