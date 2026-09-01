@@ -1,25 +1,28 @@
-use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR, C_LOG_INFO, C_LOG_TODO};
+use crate::assets::colors::colors::{
+    C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR,
+    C_LOG_INFO, C_LOG_TODO,
+};
 use crate::backend::buffers::BUFFERS;
 use crate::backend::display_string::DisplayString;
 use crate::backend::encoding::{Encoding, LineEnding};
 use crate::backend::event_handler::EventHandler;
 use crate::backend::little_string::LittleString;
-use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
-use crate::ui::log::{Log, LOGS};
-use crate::{movec, App};
+use crate::backend::modes::editor_mode::EditorMode;
+use crate::ui::log::{LOGS, Log};
+use crate::{App, movec};
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
-use ratatui::Frame;
 use std::path::Path;
 
 pub struct SaveAsData {
     pub filepath: String,
     pub cursor: u16,
     pub selection: Option<u16>,
-    pub last_content_rect: Rect
+    pub last_content_rect: Rect,
 }
 
 pub struct SaveAsMode {
@@ -59,12 +62,12 @@ impl Mode for SaveAsMode {
             handler: None,
         });
 
-
         // Render cursor
         if let Some(_) = self.data.selection {
             app.terminal_cursor.hide();
         } else {
-            app.terminal_cursor.set_to((self.data.cursor, app.last_content_rect.height + 1));
+            app.terminal_cursor
+                .set_to((self.data.cursor, app.last_content_rect.height + 1));
         }
     }
 
@@ -73,25 +76,28 @@ impl Mode for SaveAsMode {
             let min = sel.min(self.data.cursor);
             let max = sel.max(self.data.cursor);
 
-            Block::new()
-                .bg(C_BG_SELECTION)
-                .fg(C_FG_SELECTION)
-                .render(Rect {
+            Block::new().bg(C_BG_SELECTION).fg(C_FG_SELECTION).render(
+                Rect {
                     x: min,
                     y: self.data.last_content_rect.height + 1,
                     width: max - min + 1,
-                    height: 1
-                }, frame.buffer_mut());
+                    height: 1,
+                },
+                frame.buffer_mut(),
+            );
 
             Block::new()
                 .bg(C_BG_CURSOR_SELECTION)
                 .fg(C_FG_CURSOR_SELECTION)
-                .render(Rect {
-                    x: sel,
-                    y: self.data.last_content_rect.height + 1,
-                    width: 1,
-                    height: 1,
-                }, frame.buffer_mut());
+                .render(
+                    Rect {
+                        x: sel,
+                        y: self.data.last_content_rect.height + 1,
+                        width: 1,
+                        height: 1,
+                    },
+                    frame.buffer_mut(),
+                );
         }
     }
 
@@ -328,18 +334,17 @@ impl SaveAsMode {
                         }
                     }
                 ],
-                vec![
-                    |_, _, _e| {
-                        // todo!();
-                        LOGS.push(Log {
-                            message: "Double clicking when saving as is not implemented yet (todo)".to_string(),
-                            color: C_LOG_TODO,
-                            handler: None,
-                        });
-                        false
-                    }
-                ]
-            )
+                vec![|_, _, _e| {
+                    // todo!();
+                    LOGS.push(Log {
+                        message: "Double clicking when saving as is not implemented yet (todo)"
+                            .to_string(),
+                        color: C_LOG_TODO,
+                        handler: None,
+                    });
+                    false
+                }],
+            ),
         };
         self_.handle_event(app, Event::Resize(0, 0));
         self_

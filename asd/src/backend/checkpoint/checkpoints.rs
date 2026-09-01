@@ -6,7 +6,7 @@ use crate::backend::checkpoint::checkpoint_line::CheckpointEdit;
 use crate::backend::content::Content;
 use crate::backend::little_string::LittleString;
 use crate::movec;
-use crate::ui::log::{Log, LOGS};
+use crate::ui::log::{LOGS, Log};
 use std::time::Instant;
 
 pub(crate) struct Checkpoints {
@@ -25,61 +25,62 @@ impl Checkpoints {
         }) {
             return;
         }
-        self.push(
-            Checkpoint {
-                inner: carets.carets.iter_mut()
-                    .map(|caret| {
-                        let mut line = caret.get_position().cursor().get_line();
-                        let mut col = caret.get_position().cursor().get_col();
-                        let mut result = movec!();
+        self.push(Checkpoint {
+            inner: carets
+                .carets
+                .iter_mut()
+                .map(|caret| {
+                    let mut line = caret.get_position().cursor().get_line();
+                    let mut col = caret.get_position().cursor().get_col();
+                    let mut result = movec!();
 
-                        loop {
-                            let available = col;
+                    loop {
+                        let available = col;
 
-                            if caret.added_len <= available {
-                                let start = available - caret.added_len;
+                        if caret.added_len <= available {
+                            let start = available - caret.added_len;
 
-                                let text = &content[line][start..start + caret.added_len];
-
-                                result.insert(0, LittleString::from_slice(text));
-
-                                col = start;
-                                caret.added_len = 0;
-                                break;
-                            }
-
-                            let text = &content[line][..available];
+                            let text = &content[line][start..start + caret.added_len];
 
                             result.insert(0, LittleString::from_slice(text));
 
-                            caret.added_len -= available;
-
-                            if line == 0 {
-                                col = 0;
-                                break;
-                            }
-
-                            if caret.added_len == 0 {
-                                col = 0;
-                                break;
-                            }
-
-                            caret.added_len -= 1;
-                            line -= 1;
-                            col = content[line].len();
+                            col = start;
+                            caret.added_len = 0;
+                            break;
                         }
-                        let edit = SingleEdit {
-                            edit: CheckpointEdit {
-                                start_line: line,
-                                start_col: col,
-                                removed_data: std::mem::replace(&mut caret.removed_text, movec!()),
-                                added_data: result,
-                            },
-                        };
-                        edit
-                    })
-                    .collect(),
-            })
+
+                        let text = &content[line][..available];
+
+                        result.insert(0, LittleString::from_slice(text));
+
+                        caret.added_len -= available;
+
+                        if line == 0 {
+                            col = 0;
+                            break;
+                        }
+
+                        if caret.added_len == 0 {
+                            col = 0;
+                            break;
+                        }
+
+                        caret.added_len -= 1;
+                        line -= 1;
+                        col = content[line].len();
+                    }
+                    let edit = SingleEdit {
+                        edit: CheckpointEdit {
+                            start_line: line,
+                            start_col: col,
+                            removed_data: std::mem::replace(&mut caret.removed_text, movec!()),
+                            added_data: result,
+                        },
+                    };
+                    edit
+                })
+                .collect(),
+        })
     }
 }
 

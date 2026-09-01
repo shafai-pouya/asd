@@ -1,18 +1,17 @@
+use crate::App;
 use crate::backend::buffers::BUFFERS;
 use crate::backend::event_handler::EventHandler;
+use crate::backend::modes::Mode;
 use crate::backend::modes::menu_mode::MenuMode;
 use crate::backend::modes::prompt_mode::SaveAsMode;
-use crate::backend::modes::Mode;
 use crate::edit_controller::EditController;
 use crate::edit_operators::EditOperators;
-use crate::App;
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::Frame;
 
 pub struct EditorMode {
     handler: EventHandler<()>,
 }
-
 
 impl Mode for EditorMode {
     fn handle_event(&mut self, app: &mut App, event: Event) {
@@ -21,7 +20,9 @@ impl Mode for EditorMode {
 
     fn render_function(&mut self, _: &mut Frame) {}
 
-    fn needs_terminal_cursor(&self) -> bool { false }
+    fn needs_terminal_cursor(&self) -> bool {
+        false
+    }
 }
 
 impl EditorMode {
@@ -155,7 +156,7 @@ impl EditorMode {
                         if (e.modifiers & (KeyModifiers::ALT | KeyModifiers::SUPER)) != KeyModifiers::empty() {
                             return true;
                         }
-                        
+
                         if (e.modifiers & KeyModifiers::CONTROL) == KeyModifiers::CONTROL && (arrow == Arrow::L || arrow == Arrow::R) {
                             active_buffer.op_no_virtual_spaces();
                         }
@@ -261,11 +262,14 @@ impl EditorMode {
                         }
                     }
                 ],
-                vec![
-                    |_, app, e| {
-                        BUFFERS.get_change_guard().inner_mut().active_mut().operate_double_click(e.column, e.row, app.last_content_rect); false
-                    }
-                ]
+                vec![|_, app, e| {
+                    BUFFERS
+                        .get_change_guard()
+                        .inner_mut()
+                        .active_mut()
+                        .operate_double_click(e.column, e.row, app.last_content_rect);
+                    false
+                }],
             ),
         }
     }

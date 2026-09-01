@@ -94,7 +94,9 @@ impl DisplayString {
 
     #[inline]
     pub(crate) fn with_capacity(cap: usize) -> Self {
-        Self { gms: Vec::with_capacity(cap) }
+        Self {
+            gms: Vec::with_capacity(cap),
+        }
     }
 
     /// Safety: If you sure you are pushing an utf8 DChar into an utf8 DString or a Raw DChar into
@@ -120,10 +122,14 @@ impl DisplayString {
         self.gms.insert(index, ch);
     }
 
-    /// Safety: If you sure you are pushing an utf8 LittleString into an utf8 DString or a 
+    /// Safety: If you sure you are pushing an utf8 LittleString into an utf8 DString or a
     /// Raw LittleString into a raw DString, it's okay
     #[inline]
-    pub(crate) fn replace_range(&'_ mut self, range: Range<usize>, i: LittleString) -> Splice<'_, LSIntoIter> {
+    pub(crate) fn replace_range(
+        &'_ mut self,
+        range: Range<usize>,
+        i: LittleString,
+    ) -> Splice<'_, LSIntoIter> {
         self.gms.splice(range, i)
     }
 
@@ -133,7 +139,8 @@ impl DisplayString {
     }
 
     pub(crate) fn get<I>(&self, range: I) -> Option<&I::Output>
-        where I: SliceIndex<[DisplayChar]>
+    where
+        I: SliceIndex<[DisplayChar]>,
     {
         self.gms.get(range)
     }
@@ -151,7 +158,7 @@ impl DisplayString {
 
 #[repr(transparent)] // Should be because some unsafe types later
 pub struct DisplaySlice {
-    pub gms: [DisplayChar]
+    pub gms: [DisplayChar],
 }
 
 impl AsRef<[DisplayChar]> for DisplaySlice {
@@ -171,14 +178,22 @@ impl DisplaySlice {
         unsafe { &*(slice as *const [DisplayChar] as *const DisplaySlice) }
     }
 
-    pub(crate) fn to_string_to_show(&self, start_x: u16, start_y: u16, buf: &mut Buffer, emojis_to_render: &mut Vec<(u16, u16, u32)>) -> String {
+    pub(crate) fn to_string_to_show(
+        &self,
+        start_x: u16,
+        start_y: u16,
+        buf: &mut Buffer,
+        emojis_to_render: &mut Vec<(u16, u16, u32)>,
+    ) -> String {
         let mut second_color = true;
         let mut string = String::new();
         for (&i, x) in self.gms.iter().zip(start_x..) {
-            if i.self_to_string_to_show(x == start_x, self.len() as u16 - (x - start_x) == 1, &mut string) {
-                emojis_to_render.push((
-                    x, start_y, i.into()
-                ))
+            if i.self_to_string_to_show(
+                x == start_x,
+                self.len() as u16 - (x - start_x) == 1,
+                &mut string,
+            ) {
+                emojis_to_render.push((x, start_y, i.into()))
             }
             let wide_idx = i.get_coloring_state();
             if wide_idx == ColoringState::NewColor {
@@ -192,18 +207,22 @@ impl DisplaySlice {
                         width: 1,
                         height: 1,
                     },
-                    Style::new()
-                        .bg(if second_color { C_BG_SPECIAL_BYTE2 } else { C_BG_SPECIAL_BYTE1 })
+                    Style::new().bg(if second_color {
+                        C_BG_SPECIAL_BYTE2
+                    } else {
+                        C_BG_SPECIAL_BYTE1
+                    }),
                 )
             }
         }
         string
     }
 
-
     #[inline]
     pub(crate) fn to_dstring(&self) -> DisplayString {
-        DisplayString { gms: self.gms.to_vec() }
+        DisplayString {
+            gms: self.gms.to_vec(),
+        }
     }
 
     #[inline]
@@ -215,7 +234,6 @@ impl DisplaySlice {
     pub(crate) fn len(&self) -> usize {
         self.gms.len()
     }
-
 
     /// Safety: Make sure it is utf8
     #[allow(nonstandard_style)]
@@ -247,7 +265,9 @@ impl DisplaySlice {
                 Ok(buf.len())
             } // todo: remove unwrap
 
-            fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
         }
         let mut string = A(String::new());
         for &i in self {

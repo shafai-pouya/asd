@@ -1,7 +1,7 @@
 use crate::backend::display_string::DisplayString;
 use crate::backend::little_string::LittleStringUni;
 use once_cell::sync::Lazy;
-use rand::{rng, RngExt};
+use rand::{RngExt, rng};
 use std::io::{Error, Write};
 use std::sync::Mutex;
 
@@ -16,71 +16,71 @@ macro_rules! my_helper {
     };
 }
 pub const LOOKUP_SPECIAL: [u8; 260] = my_helper!([
-'N', 'U', 'L', 0, // 0x00 - NUL - 00000000
-'S', 'O', 'H', 0, // 0x01 - SOH - 00000001
-'S', 'T', 'X', 0, // 0x02 - STX - 00000010
-'E', 'T', 'X', 0, // 0x03 - ETX - 00000011
-'E', 'O', 'T', 0, // 0x04 - EOT - 00000100
-'E', 'N', 'Q', 0, // 0x05 - ENQ - 00000101
-'A', 'C', 'K', 0, // 0x06 - ACK - 00000110
-'B', 'E', 'L', 0, // 0x07 - BEL - 00000111
-'B', 'S', 0, 0, // 0x08 - BS - 00001000
-'H', 'T', 0, 0, // 0x09 - HT - 00001001
-'L', 'F', 0, 0, // 0x0A - LF - 00001010
-'V', 'T', 0, 0, // 0x0B - VT - 00001011
-'F', 'F', 0, 0, // 0x0C - FF - 00001100
-'C', 'R', 0, 0, // 0x0D - CR - 00001101
-'S', 'O', 0, 0, // 0x0E - SO - 00001110
-'S', 'I', 0, 0, // 0x0F - SI - 00001111
-'D', 'L', 'E', 0, // 0x10 - DLE - 00010000
-'D', 'C', '1', 0, // 0x11 - DC1 - 00010001
-'D', 'C', '2', 0, // 0x12 - DC2 - 00010010
-'D', 'C', '3', 0, // 0x13 - DC3 - 00010011
-'D', 'C', '4', 0, // 0x14 - DC4 - 00010100
-'N', 'A', 'K', 0, // 0x15 - NAK - 00010101
-'S', 'Y', 'N', 0, // 0x16 - SYN - 00010110
-'E', 'T', 'B', 0, // 0x17 - ETB - 00010111
-'C', 'A', 'N', 0, // 0x18 - CAN - 00011000
-'E', 'M', 0, 0, // 0x19 - EM - 00011001
-'S', 'U', 'B', 0, // 0x1A - SUB - 00011010
-'E', 'S', 'C', 0, // 0x1B - ESC - 00011011
-'F', 'S', 0, 0, // 0x1C - FS - 00011100
-'G', 'S', 0, 0, // 0x1D - GS - 00011101
-'R', 'S', 0, 0, // 0x1E - RS - 00011110
-'U', 'S', 0, 0, // 0x1F - US - 00011111
-'D', 'E', 'L', 0, // 0x7F - DEL - 00100000
-'P', 'A', 'D', 0, // 0x80 - PAD - 00100001
-'H', 'O', 'P', 0, // 0x81 - HOP - 00100010
-'B', 'P', 'H', 0, // 0x82 - BPH - 00100011
-'N', 'B', 'H', 0, // 0x83 - NBH - 00100100
-'I', 'N', 'D', 0, // 0x84 - IND - 00100101
-'N', 'E', 'L', 0, // 0x85 - NEL - 00100110
-'S', 'S', 'A', 0, // 0x86 - SSA - 00100111
-'E', 'S', 'A', 0, // 0x87 - ESA - 00101000
-'H', 'T', 'S', 0, // 0x88 - HTS - 00101001
-'H', 'T', 'J', 0, // 0x89 - HTJ - 00101010
-'V', 'T', 'S', 0, // 0x8A - VTS - 00101011
-'P', 'L', 'D', 0, // 0x8B - PLD - 00101100
-'P', 'L', 'U', 0, // 0x8C - PLU - 00101101
-'R', 'I', 0, 0, // 0x8D - RI - 00101110
-'S', 'S', '2', 0, // 0x8E - SS2 - 00101111
-'S', 'S', '3', 0, // 0x8F - SS3 - 00110000
-'D', 'C', 'S', 0, // 0x90 - DCS - 00110001
-'P', 'U', '1', 0, // 0x91 - PU1 - 00110010
-'P', 'U', '2', 0, // 0x92 - PU2 - 00110011
-'S', 'T', 'S', 0, // 0x93 - STS - 00110100
-'C', 'C', 'H', 0, // 0x94 - CCH - 00110101
-'M', 'W', 0, 0, // 0x95 - MW - 00110110
-'S', 'P', 'A', 0, // 0x96 - SPA - 00110111
-'E', 'P', 'A', 0, // 0x97 - EPA - 00111000
-'S', 'O', 'S', 0, // 0x98 - SOS - 00111001
-'S', 'G', 'C', 'I', // 0x99 - SGCI - 00111010
-'S', 'C', 'I', 0, // 0x9A - SCI - 00111011
-'C', 'S', 'I', 0, // 0x9B - CSI - 00111100
-'S', 'T', 0, 0, // 0x9C - ST - 00111101
-'O', 'S', 'C', 0, // 0x9D - OSC - 00111110
-'P', 'M', 0, 0, // 0x9E - PM - 00111111
-'A', 'P', 'C', 0, // 0x9F - APC - 01000000
+    'N', 'U', 'L', 0, // 0x00 - NUL - 00000000
+    'S', 'O', 'H', 0, // 0x01 - SOH - 00000001
+    'S', 'T', 'X', 0, // 0x02 - STX - 00000010
+    'E', 'T', 'X', 0, // 0x03 - ETX - 00000011
+    'E', 'O', 'T', 0, // 0x04 - EOT - 00000100
+    'E', 'N', 'Q', 0, // 0x05 - ENQ - 00000101
+    'A', 'C', 'K', 0, // 0x06 - ACK - 00000110
+    'B', 'E', 'L', 0, // 0x07 - BEL - 00000111
+    'B', 'S', 0, 0, // 0x08 - BS - 00001000
+    'H', 'T', 0, 0, // 0x09 - HT - 00001001
+    'L', 'F', 0, 0, // 0x0A - LF - 00001010
+    'V', 'T', 0, 0, // 0x0B - VT - 00001011
+    'F', 'F', 0, 0, // 0x0C - FF - 00001100
+    'C', 'R', 0, 0, // 0x0D - CR - 00001101
+    'S', 'O', 0, 0, // 0x0E - SO - 00001110
+    'S', 'I', 0, 0, // 0x0F - SI - 00001111
+    'D', 'L', 'E', 0, // 0x10 - DLE - 00010000
+    'D', 'C', '1', 0, // 0x11 - DC1 - 00010001
+    'D', 'C', '2', 0, // 0x12 - DC2 - 00010010
+    'D', 'C', '3', 0, // 0x13 - DC3 - 00010011
+    'D', 'C', '4', 0, // 0x14 - DC4 - 00010100
+    'N', 'A', 'K', 0, // 0x15 - NAK - 00010101
+    'S', 'Y', 'N', 0, // 0x16 - SYN - 00010110
+    'E', 'T', 'B', 0, // 0x17 - ETB - 00010111
+    'C', 'A', 'N', 0, // 0x18 - CAN - 00011000
+    'E', 'M', 0, 0, // 0x19 - EM - 00011001
+    'S', 'U', 'B', 0, // 0x1A - SUB - 00011010
+    'E', 'S', 'C', 0, // 0x1B - ESC - 00011011
+    'F', 'S', 0, 0, // 0x1C - FS - 00011100
+    'G', 'S', 0, 0, // 0x1D - GS - 00011101
+    'R', 'S', 0, 0, // 0x1E - RS - 00011110
+    'U', 'S', 0, 0, // 0x1F - US - 00011111
+    'D', 'E', 'L', 0, // 0x7F - DEL - 00100000
+    'P', 'A', 'D', 0, // 0x80 - PAD - 00100001
+    'H', 'O', 'P', 0, // 0x81 - HOP - 00100010
+    'B', 'P', 'H', 0, // 0x82 - BPH - 00100011
+    'N', 'B', 'H', 0, // 0x83 - NBH - 00100100
+    'I', 'N', 'D', 0, // 0x84 - IND - 00100101
+    'N', 'E', 'L', 0, // 0x85 - NEL - 00100110
+    'S', 'S', 'A', 0, // 0x86 - SSA - 00100111
+    'E', 'S', 'A', 0, // 0x87 - ESA - 00101000
+    'H', 'T', 'S', 0, // 0x88 - HTS - 00101001
+    'H', 'T', 'J', 0, // 0x89 - HTJ - 00101010
+    'V', 'T', 'S', 0, // 0x8A - VTS - 00101011
+    'P', 'L', 'D', 0, // 0x8B - PLD - 00101100
+    'P', 'L', 'U', 0, // 0x8C - PLU - 00101101
+    'R', 'I', 0, 0, // 0x8D - RI - 00101110
+    'S', 'S', '2', 0, // 0x8E - SS2 - 00101111
+    'S', 'S', '3', 0, // 0x8F - SS3 - 00110000
+    'D', 'C', 'S', 0, // 0x90 - DCS - 00110001
+    'P', 'U', '1', 0, // 0x91 - PU1 - 00110010
+    'P', 'U', '2', 0, // 0x92 - PU2 - 00110011
+    'S', 'T', 'S', 0, // 0x93 - STS - 00110100
+    'C', 'C', 'H', 0, // 0x94 - CCH - 00110101
+    'M', 'W', 0, 0, // 0x95 - MW - 00110110
+    'S', 'P', 'A', 0, // 0x96 - SPA - 00110111
+    'E', 'P', 'A', 0, // 0x97 - EPA - 00111000
+    'S', 'O', 'S', 0, // 0x98 - SOS - 00111001
+    'S', 'G', 'C', 'I', // 0x99 - SGCI - 00111010
+    'S', 'C', 'I', 0, // 0x9A - SCI - 00111011
+    'C', 'S', 'I', 0, // 0x9B - CSI - 00111100
+    'S', 'T', 0, 0, // 0x9C - ST - 00111101
+    'O', 'S', 'C', 0, // 0x9D - OSC - 00111110
+    'P', 'M', 0, 0, // 0x9E - PM - 00111111
+    'A', 'P', 'C', 0, // 0x9F - APC - 01000000
 ]);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -148,13 +148,11 @@ impl DisplayChar {
                 let c = grapheme.chars().next().unwrap() as u32;
                 Self::from_u8_checked(c, string)
             } else {
-                unsafe {
-                    string.push(Self::from_lsu(LittleStringUni::new(grapheme)))
-                }
+                unsafe { string.push(Self::from_lsu(LittleStringUni::new(grapheme))) }
             }
         }
     }
-    
+
     pub(crate) fn from_lsu(lsu: LittleStringUni) -> Self {
         let mut list_lock = NORMAL_LIST.lock().unwrap();
         let idx = list_lock.len() as u32;
@@ -177,7 +175,6 @@ impl DisplayChar {
             in_list_sym_idx += 1;
         }
     }
-
 
     pub(crate) fn is_whitespace(&self) -> bool {
         if let Some(c) = char::from_u32(self.0) {
@@ -260,7 +257,6 @@ impl DisplayChar {
         }
     }
 
-
     pub(crate) fn self_to_string_to_show(self, first: bool, last: bool, s: &mut String) -> bool {
         // char:            put
         // 0xAD:            put space
@@ -295,7 +291,9 @@ impl DisplayChar {
                 true
             }
         } else {
-            s.push_str(str::from_utf8(&[LOOKUP_SPECIAL[self.0 as usize & 0b00000001_11111111]]).unwrap());
+            s.push_str(
+                str::from_utf8(&[LOOKUP_SPECIAL[self.0 as usize & 0b00000001_11111111]]).unwrap(),
+            );
             false
         }
     }
@@ -367,8 +365,10 @@ impl DisplayChar {
         } else if self.0 & 3 != 0 {
             // Nothing to do
         } else if self.0 < 0xD800 {
-            panic!("raw buffer contains non-raw chars. It should not happen. You called \
-            raw__write_to function on a non-raw buffer, or a bug happened")
+            panic!(
+                "raw buffer contains non-raw chars. It should not happen. You called \
+            raw__write_to function on a non-raw buffer, or a bug happened"
+            )
         } else if self.0 < const { 0xD800 + (0x20 * 4) } {
             let idx = self.0 - const { 0xD800 };
             let ch = idx / 4;
@@ -378,8 +378,10 @@ impl DisplayChar {
             let ch = idx / 4;
             file.write(&[ch as u8])?;
         } else {
-            panic!("raw buffer contains non-raw chars. It should not happen. You called \
-            raw__write_to function on a non-raw buffer, or a bug happened")
+            panic!(
+                "raw buffer contains non-raw chars. It should not happen. You called \
+            raw__write_to function on a non-raw buffer, or a bug happened"
+            )
         }
 
         Ok(())
@@ -390,7 +392,6 @@ impl DisplayChar {
             Self::from_u8_checked(b as u32, string)
         }
     }
-
 
     /// Safety: Make sure the encoding is utf8
     pub(crate) unsafe fn utf8_to_raw(self, string: &mut DisplayString) {
@@ -421,8 +422,10 @@ impl DisplayChar {
         } else if self.0 & 3 != 0 {
             // Do nothing
         } else {
-            panic!("utf8 buffer contains non-utf8 special chars. It should not happen. You called \
-            utf8__write_to function on a non-utf8 buffer, or a bug happened")
+            panic!(
+                "utf8 buffer contains non-utf8 special chars. It should not happen. You called \
+            utf8__write_to function on a non-utf8 buffer, or a bug happened"
+            )
         }
     }
 

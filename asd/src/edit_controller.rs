@@ -9,8 +9,8 @@ use crate::backend::encoding::Encoding;
 use crate::backend::little_string::{LittleString, LittleStringUni};
 use crate::backend::selection::Selection;
 use crate::edit_operators::EditOperators;
-use crate::ui::log::{Log, LOGS};
-use crate::{movec, Clipboard};
+use crate::ui::log::{LOGS, Log};
+use crate::{Clipboard, movec};
 use ratatui::layout::Rect;
 use std::io::Write;
 use unicode_segmentation::UnicodeSegmentation;
@@ -50,14 +50,22 @@ impl EditController for Buffer {
         LOGS.clear();
         self.op_materialize_virtual_spaces();
         for caret_idx in 0..self.carets.carets.len() {
-            let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+            let mut cursor_editor = CursorEditor {
+                cursors: &mut self.carets,
+                cursor: caret_idx,
+            };
             unsafe {
                 let ls = match self.encoding {
                     Encoding::UTF8(_) => {
-                        let min = cursor_editor.cursors.carets[cursor_editor.cursor].get_position().get_min();
+                        let min = cursor_editor.cursors.carets[cursor_editor.cursor]
+                            .get_position()
+                            .get_min();
                         if min.1 == 0 {
                             let mut s = DisplayString::empty();
-                            DisplayChar::from_utf8_grapheme_to_dstring(ch.encode_utf8(&mut [0; 4]), &mut s);
+                            DisplayChar::from_utf8_grapheme_to_dstring(
+                                ch.encode_utf8(&mut [0; 4]),
+                                &mut s,
+                            );
                             LittleString::Big(s)
                         } else {
                             struct S(String);
@@ -72,7 +80,9 @@ impl EditController for Buffer {
                                 }
                             }
                             let mut s = S(String::new());
-                            self.content[min.0][min.1 - 1].utf8__write_to(&mut s).unwrap();
+                            self.content[min.0][min.1 - 1]
+                                .utf8__write_to(&mut s)
+                                .unwrap();
                             s.0.push(ch);
                             let mut g = s.0.graphemes(true);
                             let _ = g.next();
@@ -84,62 +94,79 @@ impl EditController for Buffer {
                                 ls.push(DisplayChar::from_lsu(lsu));
                                 cursor_editor.cursors.carets[cursor_editor.cursor]
                                     .get_position_mut_unchecked()
-                                    .set_min(
-                                        (min.0, min.1 - 1)
-                                    );
+                                    .set_min((min.0, min.1 - 1));
                                 ls
                             }
                         }
                     }
-                    Encoding::Raw => {
-                        LittleString::from_raw(ch.encode_utf8(&mut [0; 4]).as_bytes())
-                    }
+                    Encoding::Raw => LittleString::from_raw(ch.encode_utf8(&mut [0; 4]).as_bytes()),
                 };
-                self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(ls))
+                self.content
+                    .replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(ls))
             } // todo: maybe it isn't one cell or doesn't match the encoding
         }
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn place_new_line(&mut self, last_content_rect: Rect) {
         LOGS.clear();
         self.op_no_virtual_spaces();
         for caret_idx in 0..self.carets.carets.len() {
-            let ws = whitespaces_in_the_start_of_the_line(&self.content[self.carets.carets[caret_idx].get_position().get_min().0]);
-            let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+            let ws = whitespaces_in_the_start_of_the_line(
+                &self.content[self.carets.carets[caret_idx].get_position().get_min().0],
+            );
+            let mut cursor_editor = CursorEditor {
+                cursors: &mut self.carets,
+                cursor: caret_idx,
+            };
             unsafe {
-                self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(LittleString::empty(), LittleString::from_slice(ws)))
+                self.content.replace_text(
+                    &mut self.checkpoints,
+                    &mut cursor_editor,
+                    movec!(LittleString::empty(), LittleString::from_slice(ws)),
+                )
             } // Safety: spaces matches all encodings
         }
         self.commit();
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
-
 
     fn operate_backspace(&mut self, last_content_rect: Rect) {
         LOGS.clear();
         self.op_no_virtual_spaces();
         if self.carets.any_selected() {
             for caret_idx in 0..self.carets.carets.len() {
-                let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+                let mut cursor_editor = CursorEditor {
+                    cursors: &mut self.carets,
+                    cursor: caret_idx,
+                };
                 unsafe {
-                    self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
+                    self.content
+                        .replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
             self.commit();
         } else {
-            let commit = self.carets.carets.iter().any(|c| c.get_position().cursor().col == 0);
+            let commit = self
+                .carets
+                .carets
+                .iter()
+                .any(|c| c.get_position().cursor().col == 0);
             for caret_idx in 0..self.carets.carets.len() {
                 self.carets.carets[caret_idx].selection_make_backwards(&self.content);
                 let mut ce = CursorEditor {
-                    cursors: &mut self.carets, cursor: caret_idx
+                    cursors: &mut self.carets,
+                    cursor: caret_idx,
                 };
                 unsafe {
-                    self.content.replace_text(&mut self.checkpoints, &mut ce, movec!());
+                    self.content
+                        .replace_text(&mut self.checkpoints, &mut ce, movec!());
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
             if commit {
@@ -148,7 +175,8 @@ impl EditController for Buffer {
         }
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_delete(&mut self, last_content_rect: Rect) {
@@ -156,19 +184,29 @@ impl EditController for Buffer {
         self.op_no_virtual_spaces();
         if self.carets.any_selected() {
             for caret_idx in 0..self.carets.carets.len() {
-                let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+                let mut cursor_editor = CursorEditor {
+                    cursors: &mut self.carets,
+                    cursor: caret_idx,
+                };
                 unsafe {
-                    self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
+                    self.content
+                        .replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
             self.commit();
         } else {
-            let commit = self.carets.carets.iter().any(|c| c.get_position().cursor().col == self.content[c.get_position().cursor().line].len());
+            let commit = self.carets.carets.iter().any(|c| {
+                c.get_position().cursor().col == self.content[c.get_position().cursor().line].len()
+            });
             for caret_idx in 0..self.carets.carets.len() {
                 self.carets.carets[caret_idx].selection_make_forwards(&self.content);
-                let mut ce = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+                let mut ce = CursorEditor {
+                    cursors: &mut self.carets,
+                    cursor: caret_idx,
+                };
                 unsafe {
-                    self.content.replace_text(&mut self.checkpoints, &mut ce, movec!());
+                    self.content
+                        .replace_text(&mut self.checkpoints, &mut ce, movec!());
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
             if commit {
@@ -177,25 +215,32 @@ impl EditController for Buffer {
         }
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
-
-
 
     fn operate_tab(&mut self, last_content_rect: Rect) {
         // todo: unhandled selection
         LOGS.clear();
         self.op_materialize_virtual_spaces();
         for caret_idx in 0..self.carets.carets.len() {
-            let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+            let mut cursor_editor = CursorEditor {
+                cursors: &mut self.carets,
+                cursor: caret_idx,
+            };
             let tab_string = Self::op_get_tab_little_string(&cursor_editor, self.tab_size);
             unsafe {
-                self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(tab_string));
+                self.content.replace_text(
+                    &mut self.checkpoints,
+                    &mut cursor_editor,
+                    movec!(tab_string),
+                );
             } // spaces matches the all encodings
         }
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_scroll_prev(&mut self, i: u16) {
@@ -219,7 +264,8 @@ impl EditController for Buffer {
         self.commit();
     }
     fn operate_arrow_end(&mut self, last_content_rect: Rect) {
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_undo(&mut self, last_content_rect: Rect) {
@@ -237,19 +283,30 @@ impl EditController for Buffer {
         self.checkpoints.cursor_lened -= 1;
         let checkpoint = &self.checkpoints.others[self.checkpoints.cursor_lened];
 
-        self.carets.carets.resize_with(checkpoint.inner.len(), || Caret::new());
+        self.carets
+            .carets
+            .resize_with(checkpoint.inner.len(), || Caret::new());
         for (idx, edit) in checkpoint.inner.iter().enumerate().rev() {
             unsafe {
                 self.carets.carets[idx].set_position_unchecked(Position::new(
-                    Cursor::new(
-                        edit.edit.start_line,
-                        edit.edit.start_col
-                    ),
+                    Cursor::new(edit.edit.start_line, edit.edit.start_col),
                     Selection::new(
                         edit.edit.added_data.len().saturating_sub(1) + edit.edit.start_line,
-                        edit.edit.added_data.iter().skip(1).last().map(LittleString::len)
-                            .unwrap_or(edit.edit.added_data.get(0).map(LittleString::len).unwrap_or(0) + edit.edit.start_col)
-                    )
+                        edit.edit
+                            .added_data
+                            .iter()
+                            .skip(1)
+                            .last()
+                            .map(LittleString::len)
+                            .unwrap_or(
+                                edit.edit
+                                    .added_data
+                                    .get(0)
+                                    .map(LittleString::len)
+                                    .unwrap_or(0)
+                                    + edit.edit.start_col,
+                            ),
+                    ),
                 ));
             } // Safety: It WAS a valid location
             let mut ce = CursorEditor {
@@ -257,13 +314,15 @@ impl EditController for Buffer {
                 cursors: &mut self.carets,
             };
             unsafe {
-                self.content.replace_text_without_checkpoints(&mut ce, edit.edit.removed_data.clone())
+                self.content
+                    .replace_text_without_checkpoints(&mut ce, edit.edit.removed_data.clone())
             } // Safety: It WAS a text with the valid encoding
         }
 
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_redo(&mut self, last_content_rect: Rect) {
@@ -281,19 +340,30 @@ impl EditController for Buffer {
         let checkpoint = &self.checkpoints.others[self.checkpoints.cursor_lened];
         self.checkpoints.cursor_lened += 1;
 
-        self.carets.carets.resize_with(checkpoint.inner.len(), || Caret::new());
+        self.carets
+            .carets
+            .resize_with(checkpoint.inner.len(), || Caret::new());
         for (idx, edit) in checkpoint.inner.iter().enumerate().rev() {
             unsafe {
                 self.carets.carets[idx].set_position_unchecked(Position::new(
-                    Cursor::new(
-                        edit.edit.start_line,
-                        edit.edit.start_col
-                    ),
+                    Cursor::new(edit.edit.start_line, edit.edit.start_col),
                     Selection::new(
                         edit.edit.removed_data.len().saturating_sub(1) + edit.edit.start_line,
-                        edit.edit.removed_data.iter().skip(1).last().map(LittleString::len)
-                            .unwrap_or(edit.edit.removed_data.get(0).map(LittleString::len).unwrap_or(0) + edit.edit.start_col)
-                    )
+                        edit.edit
+                            .removed_data
+                            .iter()
+                            .skip(1)
+                            .last()
+                            .map(LittleString::len)
+                            .unwrap_or(
+                                edit.edit
+                                    .removed_data
+                                    .get(0)
+                                    .map(LittleString::len)
+                                    .unwrap_or(0)
+                                    + edit.edit.start_col,
+                            ),
+                    ),
                 ));
             } // Safety: It WAS a valid position
             let mut ce = CursorEditor {
@@ -301,13 +371,15 @@ impl EditController for Buffer {
                 cursors: &mut self.carets,
             };
             unsafe {
-                self.content.replace_text_without_checkpoints(&mut ce, edit.edit.added_data.clone())
+                self.content
+                    .replace_text_without_checkpoints(&mut ce, edit.edit.added_data.clone())
             } // Safety: It WAS a text with the valid encoding
         }
 
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_copy(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard) {
@@ -318,7 +390,8 @@ impl EditController for Buffer {
         self.op_copy(clipboard);
 
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_cut(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard) {
@@ -328,16 +401,21 @@ impl EditController for Buffer {
         self.commit();
         self.op_copy(clipboard);
         for caret_idx in 0..self.carets.carets.len() {
-            let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
+            let mut cursor_editor = CursorEditor {
+                cursors: &mut self.carets,
+                cursor: caret_idx,
+            };
             unsafe {
-                self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
+                self.content
+                    .replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
             } // Safety: You all placing nothing and don't have to worry about the encoding
         }
         self.commit();
 
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_paste(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard) {
@@ -346,23 +424,29 @@ impl EditController for Buffer {
         self.commit();
         self.op_materialize_virtual_spaces();
 
-        let Some(clipboard) = self.op_get_each_cursor_clipboard(clipboard)
-        else { return; };
+        let Some(clipboard) = self.op_get_each_cursor_clipboard(clipboard) else {
+            return;
+        };
         clipboard.1.into_map_enumerate(|(idx, to_place)| {
-            let mut ce = CursorEditor { cursor: idx, cursors: &mut self.carets };
+            let mut ce = CursorEditor {
+                cursor: idx,
+                cursors: &mut self.carets,
+            };
             unsafe {
-                self.content.replace_text(&mut self.checkpoints, &mut ce,
-                                          to_place.map(|a| a.encoding_change(clipboard.0, self.encoding))
+                self.content.replace_text(
+                    &mut self.checkpoints,
+                    &mut ce,
+                    to_place.map(|a| a.encoding_change(clipboard.0, self.encoding)),
                 );
             }
         });
 
         self.commit();
 
-
         self.buffer_modified();
         self.carets.merge();
-        self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
+        self.carets
+            .ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
     fn operate_save(&mut self) {
@@ -376,11 +460,7 @@ impl EditController for Buffer {
 
         let x = (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize;
         let y = (row.wrapping_sub(last_content_rect.y)) as usize + self.scrollbar.top_position;
-        self.carets.set_cursor_mouse(
-            x,
-            y,
-            &self.content
-        );
+        self.carets.set_cursor_mouse(x, y, &self.content);
         self.drag_start_pos = (x, y);
     }
 
@@ -391,7 +471,7 @@ impl EditController for Buffer {
         self.carets.add_cursor(
             (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize,
             row.wrapping_sub(last_content_rect.y) as usize + self.scrollbar.top_position,
-            &self.content
+            &self.content,
         );
     }
 
@@ -406,7 +486,7 @@ impl EditController for Buffer {
         cert_ptr.set_just_cursor_mouse(
             (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize,
             row.wrapping_sub(last_content_rect.y) as usize + self.scrollbar.top_position,
-            &self.content
+            &self.content,
         );
     }
 
@@ -427,15 +507,11 @@ impl EditController for Buffer {
             let mut selection = Selection::new(l, self.drag_start_pos.0);
             selection.validate_wide_chars(&self.content);
             unsafe {
-                self.carets.carets[idx].set_position_unchecked(Position::new(
-                    cursor,
-                    selection
-                ));
+                self.carets.carets[idx].set_position_unchecked(Position::new(cursor, selection));
             }
             self.carets.carets[idx].merge_sel_pos();
             idx += 1;
         }
-
     }
 
     fn operate_double_click(&mut self, col: u16, row: u16, last_content_rect: Rect) {
@@ -447,7 +523,10 @@ impl EditController for Buffer {
 
         let (line, mut start_col) = Cursor::clamp_position(x, y, &self.content);
 
-        let current_char = self.content[line].get(start_col).map(|a| *a).unwrap_or(unsafe { const { DisplayChar::from_one_cell_utf8_char_unchecked('_') } });
+        let current_char = self.content[line]
+            .get(start_col)
+            .map(|a| *a)
+            .unwrap_or(unsafe { const { DisplayChar::from_one_cell_utf8_char_unchecked('_') } });
         if !current_char.is_variable_name() {
             return;
         }
@@ -475,12 +554,10 @@ impl EditController for Buffer {
 
         // Double click occurs after a single click, so, there should be one cursor
         unsafe {
-            self.carets.carets[0].set_position_unchecked(
-                Position::new(
-                    Cursor::new(line, end_col),
-                    Selection::new(line, start_col),
-                )
-            );
+            self.carets.carets[0].set_position_unchecked(Position::new(
+                Cursor::new(line, end_col),
+                Selection::new(line, start_col),
+            ));
         }
     }
 }

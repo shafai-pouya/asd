@@ -16,7 +16,7 @@ impl Selection {
             none: false,
         }
     }
-    
+
     #[inline]
     pub(crate) fn get_lc(&self) -> (usize, usize) {
         (self.line, self.col)
@@ -46,7 +46,7 @@ impl Selection {
     pub(crate) fn display_line(&self) -> usize {
         self.line + 1
     }
-    
+
     #[inline]
     pub(crate) fn display_col(&self) -> usize {
         self.col + 1
@@ -69,7 +69,7 @@ impl Selection {
     pub(crate) fn next_or_prev_unchecked(&mut self, n: isize) {
         self.col = (self.col as isize).overflowing_add(n).0 as usize;
     }
-    
+
     #[inline]
     pub(crate) fn up_or_down_unchecked(&mut self, n: isize) {
         self.line = ((self.line as isize).overflowing_add(n).0) as usize;

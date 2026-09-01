@@ -1,20 +1,19 @@
-use crate::assets::constants::DOUBLE_CLICK_DURATION;
 use crate::App;
+use crate::assets::constants::DOUBLE_CLICK_DURATION;
 use crossterm::event::{Event, KeyEvent, MouseEvent, MouseEventKind};
 use std::time::Instant;
-
 
 pub struct EventHandler<T> {
     key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent) -> bool>,
     mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool>,
-    double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>
+    double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>,
 }
 
 impl<T> EventHandler<T> {
     pub(crate) fn new(
         key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent) -> bool>,
         mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool>,
-        double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>
+        double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>,
     ) -> Self {
         Self {
             key_handlers,
@@ -47,20 +46,23 @@ impl<T> EventHandler<T> {
         }
     }
 
-    pub(crate) fn default_double_click_handler(arg: &mut T, self_: &Self, app: &mut App, e: &MouseEvent) -> bool {
+    pub(crate) fn default_double_click_handler(
+        arg: &mut T,
+        self_: &Self,
+        app: &mut App,
+        e: &MouseEvent,
+    ) -> bool {
         if !matches!(e.kind, MouseEventKind::Down(_)) {
             return true;
         }
-        
+
         let now = Instant::now();
-        
-        if (now - app.double_click_details.2 > DOUBLE_CLICK_DURATION) || 
-            (e.column != app.double_click_details.0) ||
-            (e.row != app.double_click_details.1)
+
+        if (now - app.double_click_details.2 > DOUBLE_CLICK_DURATION)
+            || (e.column != app.double_click_details.0)
+            || (e.row != app.double_click_details.1)
         {
-            app.double_click_details = (
-                e.column, e.row, now
-            );
+            app.double_click_details = (e.column, e.row, now);
         } else {
             for double_click_handler in &self_.double_click_handlers {
                 if !double_click_handler(arg, app, e) {

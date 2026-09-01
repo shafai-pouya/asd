@@ -9,14 +9,19 @@ use ratatui::layout::Rect;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
-
 pub struct CursorEditor<'a> {
     pub cursor: usize,
     pub cursors: &'a mut Carets,
 }
 
 impl<'a> CursorEditor<'a> {
-    pub(crate) fn move_anything_after_ud_np_included(&mut self, line: usize, col: usize, ud: isize, np: isize) {
+    pub(crate) fn move_anything_after_ud_np_included(
+        &mut self,
+        line: usize,
+        col: usize,
+        ud: isize,
+        np: isize,
+    ) {
         for i in &mut *self.cursors {
             if i.position.cursor.get_line() == line && i.position.cursor.get_col() >= col {
                 i.position.cursor.next_or_prev_unchecked(np);
@@ -24,9 +29,11 @@ impl<'a> CursorEditor<'a> {
             } else if i.position.cursor.get_line() > line {
                 i.position.cursor.up_or_down_unchecked(ud);
             }
-            
-            if i.position.selection.is_none() { continue; }
-            
+
+            if i.position.selection.is_none() {
+                continue;
+            }
+
             if i.position.selection.get_line() == line && i.position.selection.get_col() >= col {
                 i.position.selection.next_or_prev_unchecked(np);
                 i.position.selection.up_or_down_unchecked(ud);
@@ -52,7 +59,9 @@ pub struct Caret {
 
 impl Caret {
     pub(crate) fn start_checkpoint(&mut self) {
-        if self.started { return; }
+        if self.started {
+            return;
+        }
         assert_eq!(self.added_len, 0);
         assert_eq!(self.removed_text.len(), 0);
         self.started = true;
@@ -86,8 +95,7 @@ impl Caret {
             }
             self.position.selection.none = false;
             self.position.selection.line = self.position.cursor.line - 1;
-            self.position.selection.col =
-                content[self.position.selection.line].len();
+            self.position.selection.col = content[self.position.selection.line].len();
         } else {
             self.position.selection.none = false;
             self.position.selection.line = self.position.cursor.line;
@@ -100,7 +108,9 @@ impl Caret {
         let caret_ptr = &mut self.position;
         if caret_ptr.cursor.col == content[caret_ptr.cursor.line].len() {
             caret_ptr.selection.line = caret_ptr.cursor.line + 1;
-            if caret_ptr.selection.line == content.len() { return; }
+            if caret_ptr.selection.line == content.len() {
+                return;
+            }
             caret_ptr.selection.col = 0;
             caret_ptr.selection.none = false;
         } else {
@@ -115,10 +125,7 @@ impl Caret {
 impl Position {
     #[inline]
     pub(crate) fn new(cursor: Cursor, selection: Selection) -> Position {
-        Position {
-            cursor,
-            selection,
-        }
+        Position { cursor, selection }
     }
 }
 
@@ -168,7 +175,7 @@ impl Position {
         let selection = (self.selection.line, self.selection.col);
         let cursor = (self.cursor.line, self.cursor.col);
         if self.selection.none {
-            return (cursor.0, cursor.1 + add_one as usize)
+            return (cursor.0, cursor.1 + add_one as usize);
         }
         if cursor > selection {
             cursor
@@ -211,7 +218,8 @@ impl Position {
         &self.cursor
     }
 
-    #[inline] pub(crate) fn selection(&self) -> &Selection {
+    #[inline]
+    pub(crate) fn selection(&self) -> &Selection {
         &self.selection
     }
     #[inline]
@@ -219,7 +227,8 @@ impl Position {
         &mut self.cursor
     }
 
-    #[inline] pub(crate) unsafe fn selection_mut(&mut self) -> &mut Selection {
+    #[inline]
+    pub(crate) unsafe fn selection_mut(&mut self) -> &mut Selection {
         &mut self.selection
     }
     #[inline]
@@ -278,9 +287,9 @@ impl Position {
 
 impl Caret {
     pub(crate) fn merge_sel_pos(&mut self) {
-        if !self.position.selection.is_none() &&
-            self.position.cursor.line == self.position.selection.line &&
-            self.position.cursor.col == self.position.selection.col
+        if !self.position.selection.is_none()
+            && self.position.cursor.line == self.position.selection.line
+            && self.position.cursor.col == self.position.selection.col
         {
             self.position.set_selection_none();
         }
@@ -332,7 +341,9 @@ pub struct Carets {
 
 impl Carets {
     pub(crate) fn any_selected(&self) -> bool {
-        self.carets.iter().any(|caret| !caret.get_position().selection.none)
+        self.carets
+            .iter()
+            .any(|caret| !caret.get_position().selection.none)
     }
 }
 
@@ -353,7 +364,9 @@ impl<'a> IntoIterator for &'a mut Carets {
     type IntoIter = CertsIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        CertsIter { inner: self.carets.iter_mut() }
+        CertsIter {
+            inner: self.carets.iter_mut(),
+        }
     }
 }
 
@@ -362,13 +375,20 @@ impl Display for Carets {
         for i in 0..self.carets.len().min(3) {
             let pos_ptr = self.carets[i].get_position();
             if pos_ptr.selection.is_none() {
-                write!(f, "{}:{} ", pos_ptr.cursor.display_line(), pos_ptr.cursor.display_col())?;
+                write!(
+                    f,
+                    "{}:{} ",
+                    pos_ptr.cursor.display_line(),
+                    pos_ptr.cursor.display_col()
+                )?;
             } else {
-                write!(f, "{}:{} TO {}:{} ",
-                       pos_ptr.cursor.display_line(),
-                       pos_ptr.cursor.display_col(),
-                       pos_ptr.selection.display_line(),
-                       pos_ptr.selection.display_col(),
+                write!(
+                    f,
+                    "{}:{} TO {}:{} ",
+                    pos_ptr.cursor.display_line(),
+                    pos_ptr.cursor.display_col(),
+                    pos_ptr.selection.display_line(),
+                    pos_ptr.selection.display_col(),
                 )?;
             }
         }
@@ -381,18 +401,28 @@ impl Display for Carets {
 
 impl Carets {
     pub(crate) fn new() -> Self {
-        Carets { carets: movec![Caret::new()] }
+        Carets {
+            carets: movec![Caret::new()],
+        }
     }
 
     /// # Notes:
     /// - merge and sort cursors is preferred
-    pub(crate) fn ensure_cursors_visible(&self, scrollbar: &mut CustomScrollbar, last_content_rect: Rect) {
+    pub(crate) fn ensure_cursors_visible(
+        &self,
+        scrollbar: &mut CustomScrollbar,
+        last_content_rect: Rect,
+    ) {
         for caret in &self.carets {
             let pos = caret.get_position();
             if pos.selection.is_none() {
                 continue;
             }
-            scrollbar.ensure_cursor_visible(pos.selection.col, pos.selection.line, last_content_rect);
+            scrollbar.ensure_cursor_visible(
+                pos.selection.col,
+                pos.selection.line,
+                last_content_rect,
+            );
         }
         for caret in &self.carets {
             let pos = caret.get_position();
@@ -404,9 +434,9 @@ impl Carets {
         self.carets.sort();
         let mut in_list_idx = 1;
         for i in 1..self.carets.len() {
-            if self.carets[i-1].position.get_max(true) > self.carets[i].position.get_min() {
+            if self.carets[i - 1].position.get_max(true) > self.carets[i].position.get_min() {
                 let max = self.carets[i].position.get_max(true);
-                let min = self.carets[i-1].position.get_min();
+                let min = self.carets[i - 1].position.get_min();
                 self.carets[in_list_idx - 1].position.set_max(max);
                 self.carets[in_list_idx - 1].position.set_min(min);
             } else {
@@ -418,28 +448,25 @@ impl Carets {
         // todo: if the prev len not equals to the current len, commit the checkpoint
     }
 
-    pub(crate) fn set_cursor_mouse(
-        &mut self,
-        x: usize,
-        y: usize,
-        content: &Content
-    ) {
+    pub(crate) fn set_cursor_mouse(&mut self, x: usize, y: usize, content: &Content) {
         self.carets.truncate(1);
         self.carets[0].position.selection.none = true;
-        self.carets[0].position.cursor.set_only_cursor_mouse(x, y, content);
+        self.carets[0]
+            .position
+            .cursor
+            .set_only_cursor_mouse(x, y, content);
     }
 
-    pub(crate) fn add_cursor(
-        &mut self,
-        mut x: usize,
-        mut y: usize,
-        content: &Content
-    ) {
+    pub(crate) fn add_cursor(&mut self, mut x: usize, mut y: usize, content: &Content) {
         (x, y) = Cursor::clamp_position(x, y, content);
         let mut cursor = Cursor::new(y, x);
         cursor.validate_wide_chars(content);
-        if let Some(idx) = self.carets.iter().position(|p| p.get_position().cursor.line == cursor.line && p.get_position().cursor.col == cursor.col) {
-            if self.carets.len() == 1 { return; }
+        if let Some(idx) = self.carets.iter().position(|p| {
+            p.get_position().cursor.line == cursor.line && p.get_position().cursor.col == cursor.col
+        }) {
+            if self.carets.len() == 1 {
+                return;
+            }
             self.carets.swap_remove(idx);
         } else {
             let pos = Position {
@@ -454,10 +481,7 @@ impl Carets {
 impl Caret {
     pub(crate) fn new() -> Self {
         Self {
-            position: Position::new(
-                Cursor::new(0, 0),
-                Selection::empty(),
-            ),
+            position: Position::new(Cursor::new(0, 0), Selection::empty()),
             started: false,
             added_len: 0,
             removed_text: movec!(),

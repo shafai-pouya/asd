@@ -60,7 +60,7 @@ impl<T> Iterator for IntoIter<T> {
     }
 }
 
-impl <T> ExactSizeIterator for IntoIter<T> {}
+impl<T> ExactSizeIterator for IntoIter<T> {}
 
 impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
@@ -119,7 +119,6 @@ impl<'a, T> Iterator for IterMut<'a, T> {
         }
     }
 }
-
 
 impl<'a, T> IntoIterator for &'a mut MostlyOneVec<T> {
     type Item = &'a mut T;
@@ -205,18 +204,14 @@ impl<T> MostlyOneVec<T> {
         match self {
             MostlyOneVec::Zero => Iter::Zero,
             MostlyOneVec::One(i) => Iter::One(i),
-            MostlyOneVec::More(v) => {
-                Iter::More(v.iter())
-            }
+            MostlyOneVec::More(v) => Iter::More(v.iter()),
         }
     }
     pub(crate) fn iter_mut(&mut self) -> IterMut<'_, T> {
         match self {
             MostlyOneVec::Zero => IterMut::Zero,
             MostlyOneVec::One(i) => IterMut::One(i),
-            MostlyOneVec::More(v) => {
-                IterMut::More(v.iter_mut())
-            }
+            MostlyOneVec::More(v) => IterMut::More(v.iter_mut()),
         }
     }
     pub(crate) fn truncate(&mut self, len: usize) {
@@ -224,10 +219,8 @@ impl<T> MostlyOneVec<T> {
             MostlyOneVec::One(_) if len == 0 => {
                 *self = MostlyOneVec::Zero;
             }
-            MostlyOneVec::More(v) =>
-                v.truncate(len),
-            MostlyOneVec::Zero |
-            MostlyOneVec::One(_) => (),
+            MostlyOneVec::More(v) => v.truncate(len),
+            MostlyOneVec::Zero | MostlyOneVec::One(_) => (),
         }
     }
     pub(crate) fn push(&mut self, item: T) {
@@ -273,9 +266,8 @@ impl<T> MostlyOneVec<T> {
             MostlyOneVec::One(i) if index == 0 => {
                 *self = MostlyOneVec::Zero;
                 i
-            },
-            MostlyOneVec::Zero |
-            MostlyOneVec::One(_) => None.unwrap(),
+            }
+            MostlyOneVec::Zero | MostlyOneVec::One(_) => None.unwrap(),
             MostlyOneVec::More(mut v) => {
                 let to_return = v.swap_remove(index);
                 *self = MostlyOneVec::More(v);
@@ -300,19 +292,23 @@ impl<T> MostlyOneVec<T> {
         }
     }
 
-    pub(crate) fn into_map_enumerate<U>(self, mut f: impl FnMut((usize, T)) -> U) -> MostlyOneVec<U> {
+    pub(crate) fn into_map_enumerate<U>(
+        self,
+        mut f: impl FnMut((usize, T)) -> U,
+    ) -> MostlyOneVec<U> {
         match self {
             MostlyOneVec::Zero => MostlyOneVec::Zero,
             MostlyOneVec::One(i) => MostlyOneVec::One(f((0, i))),
-            MostlyOneVec::More(v) => MostlyOneVec::More(v.into_iter().enumerate().map(f).collect::<Vec<U>>()),
+            MostlyOneVec::More(v) => {
+                MostlyOneVec::More(v.into_iter().enumerate().map(f).collect::<Vec<U>>())
+            }
         }
     }
 
     pub(crate) fn get(&self, index: usize) -> Option<&T> {
         match self {
             MostlyOneVec::One(i) if index == 0 => Some(i),
-            MostlyOneVec::Zero |
-            MostlyOneVec::One(_) => None,
+            MostlyOneVec::Zero | MostlyOneVec::One(_) => None,
             MostlyOneVec::More(v) => v.get(index),
         }
     }
@@ -413,17 +409,26 @@ impl<T> MostlyOneVec<T> {
             }
         }
     }
-    pub(crate) fn zip_same_size_and_map<U, V, F: Fn((T, &U)) -> V>(self, other: &MostlyOneVec<U>, f: F) -> MostlyOneVec<V> {
+    pub(crate) fn zip_same_size_and_map<U, V, F: Fn((T, &U)) -> V>(
+        self,
+        other: &MostlyOneVec<U>,
+        f: F,
+    ) -> MostlyOneVec<V> {
         match (self, other) {
             (MostlyOneVec::Zero, MostlyOneVec::Zero) => MostlyOneVec::Zero,
             (MostlyOneVec::One(i), MostlyOneVec::One(j)) => MostlyOneVec::One(f((i, j))),
-            (MostlyOneVec::More(v1), MostlyOneVec::More(v2)) => MostlyOneVec::More(v1.into_iter().zip(v2.into_iter()).map(f).collect::<Vec<_>>()),
-            (MostlyOneVec::Zero, MostlyOneVec::One(_)) |
-            (MostlyOneVec::Zero, MostlyOneVec::More(_)) |
-            (MostlyOneVec::One(_), MostlyOneVec::Zero) |
-            (MostlyOneVec::One(_), MostlyOneVec::More(_)) |
-            (MostlyOneVec::More(_), MostlyOneVec::Zero) |
-            (MostlyOneVec::More(_), MostlyOneVec::One(_)) => unreachable!(),
+            (MostlyOneVec::More(v1), MostlyOneVec::More(v2)) => MostlyOneVec::More(
+                v1.into_iter()
+                    .zip(v2.into_iter())
+                    .map(f)
+                    .collect::<Vec<_>>(),
+            ),
+            (MostlyOneVec::Zero, MostlyOneVec::One(_))
+            | (MostlyOneVec::Zero, MostlyOneVec::More(_))
+            | (MostlyOneVec::One(_), MostlyOneVec::Zero)
+            | (MostlyOneVec::One(_), MostlyOneVec::More(_))
+            | (MostlyOneVec::More(_), MostlyOneVec::Zero)
+            | (MostlyOneVec::More(_), MostlyOneVec::One(_)) => unreachable!(),
         }
     }
 }
@@ -439,7 +444,7 @@ impl<T: Clone> Clone for MostlyOneVec<T> {
 }
 
 impl<T> FromIterator<T> for MostlyOneVec<T> {
-    fn from_iter<U: IntoIterator<Item=T>>(iter: U) -> Self {
+    fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
         let mut iter = iter.into_iter();
         let Some(first) = iter.next() else {
             return MostlyOneVec::Zero;

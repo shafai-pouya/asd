@@ -1,8 +1,8 @@
 mod assets;
-mod ui;
 mod backend;
-mod edit_operators;
 mod edit_controller;
+mod edit_operators;
+mod ui;
 
 use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_HINT};
 use crate::assets::constants::POLL_DURATION;
@@ -10,18 +10,20 @@ use crate::backend::buffers::BUFFERS;
 use crate::backend::encoding::Encoding;
 use crate::backend::file_tree::FileTree;
 use crate::backend::little_string::LittleString;
-use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
+use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::mostly_one_vec::MostlyOneVec;
 use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
-use crate::ui::log::{Log, LOGS};
+use crate::ui::log::{LOGS, Log};
 use crossterm::cursor::SetCursorStyle;
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind,
+};
 use crossterm::execute;
-use crossterm::terminal::{enable_raw_mode, EnterAlternateScreen};
+use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use ratatui::layout::Position;
-use ratatui::{layout::Rect, DefaultTerminal, Frame};
+use ratatui::{DefaultTerminal, Frame, layout::Rect};
 use std::env::args;
 #[cfg(debug_assertions)]
 use std::fs::OpenOptions;
@@ -90,7 +92,9 @@ impl App {
                 };
             }),
         });
-        BUFFERS.get_file_change_guard().open_file_or_focus(path.to_path_buf());
+        BUFFERS
+            .get_file_change_guard()
+            .open_file_or_focus(path.to_path_buf());
         let is_dir = match path.metadata() {
             Ok(meta) => meta.file_type().is_dir(),
             Err(_) => false,
@@ -143,9 +147,11 @@ impl App {
     #[inline]
     pub(crate) fn draw(&mut self, terminal: &mut DefaultTerminal, mode: &mut Box<dyn Mode>) {
         let mut emoji_queue = vec![];
-        terminal.draw(|frame| {
-            emoji_queue = self.render(frame, mode);
-        }).unwrap();
+        terminal
+            .draw(|frame| {
+                emoji_queue = self.render(frame, mode);
+            })
+            .unwrap();
         self.terminal_cursor.render_emoji_queue(emoji_queue);
         self.terminal_cursor.render1();
         self.terminal_cursor.render2(terminal);
@@ -164,17 +170,23 @@ impl App {
             Event::Mouse(me) => {
                 if let Some(handler) = LOGS.handler_of_mouse_event(me, self.last_content_rect) {
                     handler(me, self)
-                } else if self.next_is_separator_event ||
-                    self.last_tree_and_content_separator_rect.contains(Position::new(me.column, me.row))
+                } else if self.next_is_separator_event
+                    || self
+                        .last_tree_and_content_separator_rect
+                        .contains(Position::new(me.column, me.row))
                 {
-
-                    self.file_tree.as_mut().unwrap().handle_separator_event(
-                        me, &mut self.next_is_separator_event
-                    ) // Safety: last_tree_rect should be empty when file tree isn't present
-                } else if self.last_tree_rect.contains(Position::new(me.column, me.row)) {
-                    self.file_tree.as_mut().unwrap().handle_event(
-                        me, self.last_tree_rect
-                    ) // Safety: last_tree_rect should be empty when file tree isn't present
+                    self.file_tree
+                        .as_mut()
+                        .unwrap()
+                        .handle_separator_event(me, &mut self.next_is_separator_event) // Safety: last_tree_rect should be empty when file tree isn't present
+                } else if self
+                    .last_tree_rect
+                    .contains(Position::new(me.column, me.row))
+                {
+                    self.file_tree
+                        .as_mut()
+                        .unwrap()
+                        .handle_event(me, self.last_tree_rect) // Safety: last_tree_rect should be empty when file tree isn't present
                 } else {
                     mode.handle_event(self, event);
                     if let Some(m) = self.change_mode.take() {
@@ -228,11 +240,10 @@ fn main() {
     #[cfg(debug_assertions)]
     unsafe {
         let file = OpenOptions::new()
-           .read(true)
-           .write(true)
-           .open("/dev/pts/36")
+            .read(true)
+            .write(true)
+            .open("/dev/pts/36")
             .unwrap();
-
 
         libc::dup2(file.as_raw_fd(), 0); // stdin
         libc::dup2(file.as_raw_fd(), 1); // stdout
@@ -255,7 +266,6 @@ fn main() {
         std::io::stdout().flush().unwrap();
     }
 
-
     // Handle args
     let mut args = args().into_iter();
     args.next();
@@ -270,16 +280,12 @@ fn main() {
     };
     assert_eq!(args.next(), None);
 
-
     // error handling
     color_eyre::install().unwrap(); // You can panic here
     let old_hook = std::panic::take_hook();
 
     std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = execute!(
-            std::io::stdout(),
-            DisableMouseCapture,
-        );
+        let _ = execute!(std::io::stdout(), DisableMouseCapture,);
 
         old_hook(panic_info);
     }));
@@ -292,16 +298,14 @@ fn main() {
         EnterAlternateScreen,
         EnableMouseCapture,
         SetCursorStyle::BlinkingUnderScore,
-    ).unwrap(); // Usually ok, but you can panic here
+    )
+    .unwrap(); // Usually ok, but you can panic here
 
     // app
     let mut mode = Box::new(EditorMode::new()) as Box<dyn Mode>;
     app.run(&mut terminal, &mut mode);
 
     // end
-    execute!(
-        std::io::stdout(),
-        DisableMouseCapture,
-    ).unwrap(); // Usually ok, but you can panic here;
+    execute!(std::io::stdout(), DisableMouseCapture,).unwrap(); // Usually ok, but you can panic here;
     ratatui::restore();
 }

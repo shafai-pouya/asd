@@ -1,10 +1,10 @@
 use crate::App;
 use crossterm::event::MouseEvent;
 use once_cell::sync::Lazy;
+use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Stylize};
 use ratatui::widgets::Widget;
-use ratatui::Frame;
 use std::sync::Mutex;
 
 static LOGS_LOCK: Lazy<Mutex<Vec<Log>>> = Lazy::new(|| Mutex::new(vec![]));
@@ -27,10 +27,16 @@ impl LogsType {
     pub fn get_clone(&self, index: usize) -> Option<Log> {
         LOGS_LOCK.lock().unwrap().get(index).cloned()
     }
-    pub fn handler_of_mouse_event(&self, me: MouseEvent, last_content_rect: Rect) -> Option<LogEvent> {
+    pub fn handler_of_mouse_event(
+        &self,
+        me: MouseEvent,
+        last_content_rect: Rect,
+    ) -> Option<LogEvent> {
         let logs_lock = LOGS_LOCK.lock().unwrap();
         if me.row > last_content_rect.height + 1 - logs_lock.len() as u16 {
-            if let Some(log) = logs_lock.get(me.row as usize + logs_lock.len() - 2 - last_content_rect.height as usize) {
+            if let Some(log) = logs_lock
+                .get(me.row as usize + logs_lock.len() - 2 - last_content_rect.height as usize)
+            {
                 return log.handler;
             }
         }
@@ -46,23 +52,24 @@ pub struct Log {
 }
 
 pub(crate) fn render_logs(frame: &mut Frame, logs_area: Rect) {
-    let _ = LOGS_LOCK.lock().unwrap().iter()
+    let _ = LOGS_LOCK
+        .lock()
+        .unwrap()
+        .iter()
         .enumerate()
         .map(|(i, log)| {
-            let mut x = log.message.clone()
-                .fg(log.color);
+            let mut x = log.message.clone().fg(log.color);
             if log.handler.is_some() {
                 x = x.underlined();
             }
-            x
-                .render(
-                    Rect {
-                        height: 1,
-                        y: logs_area.y + i as u16,
-                        ..logs_area
-                    },
-                    frame.buffer_mut()
-                )
+            x.render(
+                Rect {
+                    height: 1,
+                    y: logs_area.y + i as u16,
+                    ..logs_area
+                },
+                frame.buffer_mut(),
+            )
         })
         .collect::<Vec<_>>();
 }

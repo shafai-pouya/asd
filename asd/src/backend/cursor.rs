@@ -16,7 +16,11 @@ pub struct Cursor {
 impl Cursor {
     #[inline]
     pub(crate) fn new(line: usize, col: usize) -> Self {
-        Self { line, col, goal: HorizontalGoal::Column(col) }
+        Self {
+            line,
+            col,
+            goal: HorizontalGoal::Column(col),
+        }
     }
 
     #[inline]
@@ -24,11 +28,7 @@ impl Cursor {
         (self.line, self.col)
     }
 
-    pub(crate) fn clamp_position(
-        x: usize,
-        y: usize,
-        content: &Content,
-    ) -> (usize, usize) {
+    pub(crate) fn clamp_position(x: usize, y: usize, content: &Content) -> (usize, usize) {
         if content.len() == 0 {
             return (0, 0);
         }
@@ -77,12 +77,7 @@ impl Cursor {
         }
     }
 
-    pub(crate) fn set_only_cursor_mouse(
-        &mut self,
-        x: usize,
-        y: usize,
-        content: &Content
-    ) {
+    pub(crate) fn set_only_cursor_mouse(&mut self, x: usize, y: usize, content: &Content) {
         let (line, col) = Self::clamp_position(x, y, content);
 
         self.line = line;
@@ -114,7 +109,8 @@ impl Cursor {
             if let Some(ch) = content[self.line].get(self.col) {
                 let base_state = ch.is_variable_name();
                 while self.col < line_len {
-                    if content[self.line][self.col].is_variable_name() == base_state { // Safety: self.col is less than line_len
+                    if content[self.line][self.col].is_variable_name() == base_state {
+                        // Safety: self.col is less than line_len
                         self.col += 1;
                     } else {
                         break;
@@ -139,7 +135,7 @@ impl Cursor {
     pub(crate) fn up_or_down_unchecked(&mut self, n: isize) {
         self.line = (self.line as isize).overflowing_add(n).0 as usize;
     }
-    
+
     pub(crate) fn prev(&mut self, content: &Content) {
         if self.col > 0 {
             self.col = self.col.saturating_sub(1);
@@ -155,13 +151,18 @@ impl Cursor {
 
     pub(crate) fn prev_word(&mut self, content: &Content) {
         if self.col > 0 {
-            while content[self.line].get(self.col).map(|c| *c == ' ').unwrap_or(false) {
+            while content[self.line]
+                .get(self.col)
+                .map(|c| *c == ' ')
+                .unwrap_or(false)
+            {
                 self.col -= 1;
             }
             if let Some(ch) = content[self.line].get(self.col - 1) {
                 let base_state = ch.is_variable_name();
                 while self.col > 0 {
-                    if content[self.line][self.col - 1].is_variable_name() == base_state { // Safe if you call op_no_virtual_spaces before
+                    if content[self.line][self.col - 1].is_variable_name() == base_state {
+                        // Safe if you call op_no_virtual_spaces before
                         self.col -= 1;
                     } else {
                         break;
@@ -191,11 +192,8 @@ impl Cursor {
 
         self.validate_wide_chars(content);
     }
-    
 
-    pub(crate) fn up(&mut self,
-              i: usize,
-              content: &Content) {
+    pub(crate) fn up(&mut self, i: usize, content: &Content) {
         self.line = self.line.saturating_sub(i);
 
         let line_len = content[self.line].len();
@@ -219,19 +217,14 @@ impl Cursor {
         self.col = content[self.line].len();
         self.goal = HorizontalGoal::EndOfLine;
     }
-    
-    pub(crate) fn ctrl_home(
-        &mut self
-    ) {
+
+    pub(crate) fn ctrl_home(&mut self) {
         self.col = 0;
         self.line = 0;
         self.goal = HorizontalGoal::Column(0);
     }
-    
-    pub(crate) fn ctrl_end(
-        &mut self,
-        content: &Content,
-    ) {
+
+    pub(crate) fn ctrl_end(&mut self, content: &Content) {
         self.col = 0;
         self.line = content.len() - 1;
         self.goal = HorizontalGoal::Column(0);

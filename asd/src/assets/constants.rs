@@ -1,13 +1,11 @@
 use std::time::Duration;
 
-
 /// The max duration which the code waits for events. It you set it to a lower value, it uses more cpu usage, and if
-/// you set it to a high value, frames will draw more lately if you don't receive any events before this time 
+/// you set it to a high value, frames will draw more lately if you don't receive any events before this time
 pub const POLL_DURATION: Duration = Duration::from_millis(100);
 
 /// This file will be bound to read-only buffers.
 pub const READ_ONLY_PATH: &str = "/dev/full";
-
 
 /// The max number of stored checkpoints. If checkpoints become more than this number, [`N_DRAIN_CHECKPOINTS`] of them
 /// will drain from the beginning

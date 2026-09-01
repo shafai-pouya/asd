@@ -3,7 +3,7 @@ use crate::backend::caret::{CursorEditor, Position};
 use crate::backend::cursor::Cursor;
 use crate::backend::little_string::LittleString;
 use crate::backend::selection::Selection;
-use crate::{movec, Clipboard};
+use crate::{Clipboard, movec};
 
 /// This trait made to be implemented for only one struct. It made
 /// to implement some functions in another file, for readability,
@@ -36,8 +36,11 @@ impl EditOperators for Buffer {
                 unsafe {
                     self.content.replace_text(
                         &mut self.checkpoints,
-                        &mut CursorEditor { cursor: i, cursors: &mut self.carets },
-                        movec!(LittleString::from_spaces_repeated(diff))
+                        &mut CursorEditor {
+                            cursor: i,
+                            cursors: &mut self.carets,
+                        },
+                        movec!(LittleString::from_spaces_repeated(diff)),
                     );
                 } // Safety: spaces work on all encodings
                 continue;
@@ -76,19 +79,25 @@ impl EditOperators for Buffer {
                     pos.cursor_mut().set_col(self.content[line].len());
                 }
             }
-            unsafe { self.carets.carets[i].set_position_unchecked(pos); }
+            unsafe {
+                self.carets.carets[i].set_position_unchecked(pos);
+            }
             self.carets.carets[i].merge_sel_pos()
         }
     }
 
     fn op_get_tab_little_string(ce: &CursorEditor, tab_size: usize) -> LittleString {
-        let tab_len = tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor().col % tab_size);
+        let tab_len =
+            tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor().col % tab_size);
         LittleString::from_spaces_repeated(tab_len)
     }
 
     fn op_copy(&mut self, clipboard: &mut Clipboard) {
         unsafe {
-            *clipboard = (self.encoding, self.content.get_selected_texts_to_copy(&self.carets));
+            *clipboard = (
+                self.encoding,
+                self.content.get_selected_texts_to_copy(&self.carets),
+            );
         }
     }
 
@@ -96,7 +105,10 @@ impl EditOperators for Buffer {
         if self.carets.carets.len() == clipboard.1.len() {
             Some(clipboard.clone())
         } else if self.carets.carets.len() == 1 {
-            Some((clipboard.0, movec!(clipboard.1.iter().map(|a| a[0].clone()).collect())))
+            Some((
+                clipboard.0,
+                movec!(clipboard.1.iter().map(|a| a[0].clone()).collect()),
+            ))
         } else {
             None
         }

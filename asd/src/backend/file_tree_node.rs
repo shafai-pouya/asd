@@ -1,6 +1,6 @@
 use crate::assets::colors::colors::{C_TREE_FG_DIR, C_TREE_FG_FILE};
 use crate::assets::constants::{TREE_FILE_LOADED_SYMBOL, TREE_FILE_MODIFIED_SYMBOL};
-use crate::backend::buffers::{Buffers, Inode, BUFFERS};
+use crate::backend::buffers::{BUFFERS, Buffers, Inode};
 use crate::backend::file_tree::NodePointer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -17,12 +17,10 @@ pub(crate) enum ColoringProto {
 impl ColoringProto {
     pub(crate) fn draw(&self, rect: Rect, buffer: &mut ratatui::buffer::Buffer) {
         Block::new()
-            .fg(
-            match self {
-                    ColoringProto::File => C_TREE_FG_FILE,
-                    ColoringProto::Dir => C_TREE_FG_DIR,
-                }
-            )
+            .fg(match self {
+                ColoringProto::File => C_TREE_FG_FILE,
+                ColoringProto::Dir => C_TREE_FG_DIR,
+            })
             .render(rect, buffer)
     }
 }
@@ -34,7 +32,7 @@ pub(crate) struct FileTreeNode {
     dirty: bool,
     inode: Option<Inode>,
     // depth: usize,
-    pub children: Vec<FileTreeNode>
+    pub children: Vec<FileTreeNode>,
 }
 
 impl Debug for FileTreeNode {
@@ -52,7 +50,8 @@ impl Debug for FileTreeNode {
             is_dir: self.is_dir,
             expanded: self.expanded,
             dirty: self.dirty,
-        }.fmt(f)
+        }
+        .fmt(f)
     }
 }
 
@@ -87,7 +86,9 @@ impl FileTreeNode {
     }
 
     pub(crate) fn expand(&mut self) {
-        if !self.is_dir { return; }
+        if !self.is_dir {
+            return;
+        }
         self.expanded = true;
         self.undirty();
     }
@@ -96,9 +97,11 @@ impl FileTreeNode {
         if self.dirty {
             self.dirty = false;
             self.children.clear();
-            for entry in read_dir(self.path.as_path()).unwrap() { // todo: remove unwrap
+            for entry in read_dir(self.path.as_path()).unwrap() {
+                // todo: remove unwrap
                 let entry = entry.unwrap(); // todo: remove unwrap
-                self.children.push(if entry.file_type().unwrap().is_file() { // todo: remove unwrap
+                self.children.push(if entry.file_type().unwrap().is_file() {
+                    // todo: remove unwrap
                     Self::file_from(entry.path())
                 } else {
                     Self::dir_from(entry.path())
@@ -115,7 +118,9 @@ impl FileTreeNode {
                 self.expand();
             }
         } else {
-            BUFFERS.get_file_change_guard().open_file_or_focus(self.path.clone());
+            BUFFERS
+                .get_file_change_guard()
+                .open_file_or_focus(self.path.clone());
         }
     }
 
@@ -123,7 +128,7 @@ impl FileTreeNode {
         let mut parent = self;
         for &i in &pointer.inner {
             if !parent.expanded {
-                return None
+                return None;
             }
             parent = parent.children.get(i)?;
         }
@@ -139,12 +144,20 @@ impl FileTreeNode {
 
     pub(crate) fn r00t_push_string(&mut self, ptr: &NodePointer, str: &mut String) -> usize {
         let mut coloring_start_x = 0;
-        str.push(' '); coloring_start_x += 1;
-        str.push(match BUFFERS.get_check_guard().get_online_state(self.get_mut(ptr).unwrap().get_inode()) { // The pointer should be valid
-            OnlineState::Nothing => ' ',
-            OnlineState::Opened => TREE_FILE_LOADED_SYMBOL,
-            OnlineState::Modified => TREE_FILE_MODIFIED_SYMBOL,
-        }); coloring_start_x += 1;
+        str.push(' ');
+        coloring_start_x += 1;
+        str.push(
+            match BUFFERS
+                .get_check_guard()
+                .get_online_state(self.get_mut(ptr).unwrap().get_inode())
+            {
+                // The pointer should be valid
+                OnlineState::Nothing => ' ',
+                OnlineState::Opened => TREE_FILE_LOADED_SYMBOL,
+                OnlineState::Modified => TREE_FILE_MODIFIED_SYMBOL,
+            },
+        );
+        coloring_start_x += 1;
         str.push(' ');
         let mut parent = self as &FileTreeNode;
         if ptr.inner.len() != 0 {
@@ -156,7 +169,8 @@ impl FileTreeNode {
                 }
                 parent = parent.children.get(i).unwrap(); // The pointer should be valid
             }
-            if *ptr.inner.last().unwrap() + 1 == parent.children.len() { // We checked (ptr.inner.len() != 0)
+            if *ptr.inner.last().unwrap() + 1 == parent.children.len() {
+                // We checked (ptr.inner.len() != 0)
                 str.push_str("└─");
             } else {
                 str.push_str("├─");
@@ -164,7 +178,12 @@ impl FileTreeNode {
         }
         coloring_start_x += 2 * ptr.inner.len();
         let node = self.get(ptr).unwrap(); // The pointer should be valid
-        str.push_str(if node.is_dir { if node.expanded { "▼ " } else { "▶ " } } else { "  " });  coloring_start_x += 2;
+        str.push_str(if node.is_dir {
+            if node.expanded { "▼ " } else { "▶ " }
+        } else {
+            "  "
+        });
+        coloring_start_x += 2;
         str.push_str(node.path.file_name().unwrap().to_str().unwrap());
         str.push('\n');
         coloring_start_x
@@ -180,8 +199,11 @@ impl FileTreeNode {
         }
     }
 
-
     pub(crate) fn get_coloring_proto(&self) -> ColoringProto {
-        if self.is_dir { ColoringProto::Dir } else { ColoringProto::File }
+        if self.is_dir {
+            ColoringProto::Dir
+        } else {
+            ColoringProto::File
+        }
     }
 }

@@ -17,7 +17,12 @@ impl CustomScrollbar {
         }
     }
 
-    pub(crate) fn get_start_end(&mut self, file_scroll_area: Rect, content_area: Rect, content: &Content) -> (u16, u16) {
+    pub(crate) fn get_start_end(
+        &mut self,
+        file_scroll_area: Rect,
+        content_area: Rect,
+        content: &Content,
+    ) -> (u16, u16) {
         let content_width = content.get_max_line_length() + SCROLLBAR_EMPTY_COLS_PADDING;
         let viewport_width = content_area.width as usize;
         let scrollbar_width = file_scroll_area.width as usize;
@@ -28,16 +33,14 @@ impl CustomScrollbar {
         } else {
             let max_scroll = content_width - viewport_width;
 
-            let thumb_width = ((viewport_width as f64
-                / content_width as f64)
+            let thumb_width = ((viewport_width as f64 / content_width as f64)
                 * scrollbar_width as f64)
                 .round()
                 .max(1.0) as usize;
 
             let track_width = scrollbar_width.saturating_sub(thumb_width);
 
-            let thumb_start = ((visible_start.min(max_scroll) as f64
-                / max_scroll as f64)
+            let thumb_start = ((visible_start.min(max_scroll) as f64 / max_scroll as f64)
                 * track_width as f64)
                 .round() as usize;
 
@@ -73,13 +76,18 @@ impl CustomScrollbar {
     }
 
     pub(crate) fn validate_position(&mut self, content: &Content, content_area: Rect) {
-        if let Some(max_position) = ((content.get_max_line_length() + SCROLLBAR_EMPTY_COLS_PADDING) as u16).checked_sub(content_area.width) {
+        if let Some(max_position) = ((content.get_max_line_length() + SCROLLBAR_EMPTY_COLS_PADDING)
+            as u16)
+            .checked_sub(content_area.width)
+        {
             self.position = self.position.min(max_position);
         } else {
             self.position = 0;
         }
 
-        if let Some(max_position) = (content.len() + SCROLLBAR_EMPTY_ROWS_PADDING).checked_sub(content_area.height as usize) {
+        if let Some(max_position) =
+            (content.len() + SCROLLBAR_EMPTY_ROWS_PADDING).checked_sub(content_area.height as usize)
+        {
             self.top_position = self.top_position.min(max_position);
         } else {
             self.top_position = 0;
@@ -87,8 +95,9 @@ impl CustomScrollbar {
     }
 
     pub(crate) fn ensure_cursor_visible(&mut self, x: usize, y: usize, last_content_rect: Rect) {
-        if self.freeze { return; }
-
+        if self.freeze {
+            return;
+        }
 
         if y < self.top_position {
             self.top_position = y;

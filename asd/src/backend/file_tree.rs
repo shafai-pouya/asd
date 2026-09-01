@@ -14,7 +14,7 @@ impl NodePointer {
         let start_n = n;
         loop {
             if n == 0 {
-                return Ok(self_)
+                return Ok(self_);
             } else {
                 match self_.push_0(&tree.root) {
                     Ok(()) => {}
@@ -40,7 +40,9 @@ impl NodePointer {
         self.inner.push(0);
         while root.get(self).is_none() {
             self.inner.truncate(self.inner.len() - 1);
-            let Some(last) = self.inner.last_mut() else { return Err(()); };
+            let Some(last) = self.inner.last_mut() else {
+                return Err(());
+            };
             *last += 1;
         }
         Ok(())
@@ -70,7 +72,8 @@ impl FileTree {
                 self.scrollbar_y += 5;
                 let lines_n = NodePointer::get_on_nth_line(usize::MAX, &self).unwrap_err(); // Safety: There is no way it reaches usize::MAX
                 if lines_n + 10 < self.scrollbar_y + last_tree_rect.height as usize {
-                    self.scrollbar_y = (lines_n + 10).saturating_sub(last_tree_rect.height as usize);
+                    self.scrollbar_y =
+                        (lines_n + 10).saturating_sub(last_tree_rect.height as usize);
                 }
                 return;
             }
@@ -84,12 +87,18 @@ impl FileTree {
         }
 
         let n = event.row as usize + self.scrollbar_y;
-        let Ok(pointer) = NodePointer::get_on_nth_line(n, &self) else { return; }; 
+        let Ok(pointer) = NodePointer::get_on_nth_line(n, &self) else {
+            return;
+        };
 
         let a = self.root.get_mut(&pointer).unwrap(); // Safety: The pointer is valid
         a.handle_single_click();
     }
-    pub(crate) fn handle_separator_event(&mut self, event: MouseEvent, next_is_separator: &mut bool) {
+    pub(crate) fn handle_separator_event(
+        &mut self,
+        event: MouseEvent,
+        next_is_separator: &mut bool,
+    ) {
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 *next_is_separator = true;
@@ -98,7 +107,7 @@ impl FileTree {
             MouseEventKind::Up(MouseButton::Left) => {
                 *next_is_separator = false;
                 return;
-            },
+            }
             _ => {
                 return;
             }
@@ -106,20 +115,28 @@ impl FileTree {
 
         self.width = event.column;
     }
-    pub(crate) fn get_all_texts_from_len(&mut self, start: usize, len: u16, buffer: &mut ratatui::buffer::Buffer) -> String {
+    pub(crate) fn get_all_texts_from_len(
+        &mut self,
+        start: usize,
+        len: u16,
+        buffer: &mut ratatui::buffer::Buffer,
+    ) -> String {
         let mut to_return = String::new();
-        let Ok(mut ptr) = NodePointer::get_on_nth_line(start, &self) else { 
+        let Ok(mut ptr) = NodePointer::get_on_nth_line(start, &self) else {
             return to_return;
         };
         for displaying_row in 0..len {
             let coloring_x = self.root.r00t_push_string(&ptr, &mut to_return) as u16;
             let coloring_protocol = self.root.get(&ptr).unwrap().get_coloring_proto(); // Safety: The pointer is valid
-            coloring_protocol.draw(Rect {
-                x: coloring_x,
-                y: displaying_row,
-                width: self.width - coloring_x,
-                height: 1,
-            }, buffer);
+            coloring_protocol.draw(
+                Rect {
+                    x: coloring_x,
+                    y: displaying_row,
+                    width: self.width - coloring_x,
+                    height: 1,
+                },
+                buffer,
+            );
             if ptr.next(&self).is_err() {
                 return to_return;
             };

@@ -1,10 +1,10 @@
 use crate::App;
 use crossterm::event::Event;
-use ratatui::{Frame};
+use ratatui::Frame;
 
 pub mod editor_mode;
-pub mod prompt_mode;
 mod menu_mode;
+pub mod prompt_mode;
 
 pub trait Mode {
     fn handle_event(&mut self, app: &mut App, event: Event);

@@ -6,14 +6,14 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
 
-pub(crate) fn render_bar(bar: Rect, under_bar: Rect, buf: &mut Buffer, buffers: &mut BuffersRenderGuard) {
-    Block::default()
-        .bg(C_BG_BAR)
-        .fg(C_FG_BAR)
-        .render(bar, buf);
-    Block::default()
-        .bg(C_BG_NORMAL)
-        .render(under_bar, buf);
+pub(crate) fn render_bar(
+    bar: Rect,
+    under_bar: Rect,
+    buf: &mut Buffer,
+    buffers: &mut BuffersRenderGuard,
+) {
+    Block::default().bg(C_BG_BAR).fg(C_FG_BAR).render(bar, buf);
+    Block::default().bg(C_BG_NORMAL).render(under_bar, buf);
 
     let mut flags = String::new();
 
@@ -27,14 +27,20 @@ pub(crate) fn render_bar(bar: Rect, under_bar: Rect, buf: &mut Buffer, buffers: 
         flags.push_str(" ⏸"); // todo: maybe will change it to all buffers?
     }
 
-    let _ =
-        (0..20-flags.chars().count())
-            .map(|_| flags.push(' ')).collect::<Vec<_>>();
+    let _ = (0..20 - flags.chars().count())
+        .map(|_| flags.push(' '))
+        .collect::<Vec<_>>();
 
+    let left_str = format!(
+        " {}{} {}",
+        active_buffer.showing_filename, flags, active_buffer.carets
+    ); // todo: maybe will change it to all buffers?
 
-    let left_str = format!(" {}{} {}", active_buffer.showing_filename, flags, active_buffer.carets); // todo: maybe will change it to all buffers?
-
-    let right_str = format!("{}    {} ", active_buffer.encoding, Local::now().format("%H:%M")); // todo: maybe will change it to all buffers?
+    let right_str = format!(
+        "{}    {} ",
+        active_buffer.encoding,
+        Local::now().format("%H:%M")
+    ); // todo: maybe will change it to all buffers?
 
     let horizontal = Layout::horizontal([
         Constraint::Min(0),

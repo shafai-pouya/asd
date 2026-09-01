@@ -1,9 +1,9 @@
+use crate::App;
 use crate::assets::colors::colors::C_LOG_TODO;
 use crate::assets::constants::READ_ONLY_PATH;
 use crate::backend::buffer::Buffer;
 use crate::backend::file_tree_node::OnlineState;
-use crate::ui::log::{Log, LOGS};
-use crate::App;
+use crate::ui::log::{LOGS, Log};
 use crossterm::event::KeyEvent;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -14,7 +14,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
-pub static BUFFERS_LOCK: Lazy<Mutex<Buffers>> = Lazy::new(|| Mutex::new(unsafe { Buffers::empty() }));
+pub static BUFFERS_LOCK: Lazy<Mutex<Buffers>> =
+    Lazy::new(|| Mutex::new(unsafe { Buffers::empty() }));
 
 pub struct BuffersType;
 pub static BUFFERS: BuffersType = BuffersType;
@@ -32,27 +33,26 @@ impl BuffersType {
     }
     pub fn get_render_guard(&self) -> BuffersRenderGuard<'_> {
         BuffersRenderGuard {
-            buffers: self.get_guard()
+            buffers: self.get_guard(),
         }
     }
     pub fn get_change_guard(&self) -> BuffersChangeGuard<'_> {
         BuffersChangeGuard {
-            buffers: self.get_guard()
+            buffers: self.get_guard(),
         }
     }
 
     pub fn get_check_guard(&self) -> BuffersCheckGuard<'_> {
         BuffersCheckGuard {
-            buffers: self.get_guard()
+            buffers: self.get_guard(),
         }
     }
 
     pub fn get_file_change_guard(&self) -> BuffersFileChangeGuard<'_> {
         BuffersFileChangeGuard {
-            buffers: self.get_guard()
+            buffers: self.get_guard(),
         }
     }
-
 
     #[inline]
     pub fn handle_checkpoint_timers(&self) {
@@ -138,8 +138,7 @@ impl BuffersCheckGuard<'_> {
     }
 
     pub(crate) fn any_modified(&self) -> bool {
-        self.buffers.buffers.inner.iter()
-            .any(|(_, a)| a.modified)
+        self.buffers.buffers.inner.iter().any(|(_, a)| a.modified)
     }
 }
 
@@ -149,11 +148,14 @@ pub struct BuffersFileChangeGuard<'a> {
 impl BuffersFileChangeGuard<'_> {
     pub(crate) fn open_help(&mut self) {
         let inode = Inode::new_virtual();
-        self.buffers.buffers.inner.insert(inode, Buffer::new_custom(
-            PathBuf::from(READ_ONLY_PATH),
-            "help.txt (READONLY)".to_string(),
-            include_str!("../assets/help.txt")
-        ));
+        self.buffers.buffers.inner.insert(
+            inode,
+            Buffer::new_custom(
+                PathBuf::from(READ_ONLY_PATH),
+                "help.txt (READONLY)".to_string(),
+                include_str!("../assets/help.txt"),
+            ),
+        );
         self.buffers.buffers.active_inode = inode;
     }
 
@@ -162,9 +164,7 @@ impl BuffersFileChangeGuard<'_> {
     }
 
     pub(crate) fn open_file_or_focus(&mut self, path: PathBuf) {
-        let inode = Buffers::get_inode(&path).unwrap_or_else(|_| {
-            Inode::new_virtual()
-        });
+        let inode = Buffers::get_inode(&path).unwrap_or_else(|_| Inode::new_virtual());
         self.buffers.buffers.active_inode = inode;
         if !self.buffers.buffers.inner.contains_key(&inode) {
             self.insert(inode, Buffer::new_from_file(path));
@@ -193,7 +193,10 @@ pub(crate) struct Buffers {
 
 impl Buffers {
     pub unsafe fn empty() -> Self {
-        Self { inner: HashMap::new(), active_inode: Inode::Virtual(0) }
+        Self {
+            inner: HashMap::new(),
+            active_inode: Inode::Virtual(0),
+        }
     }
 
     pub(crate) fn active(&self) -> &Buffer {
@@ -202,11 +205,11 @@ impl Buffers {
     pub(crate) fn active_mut(&mut self) -> &mut Buffer {
         self.inner.get_mut(&self.active_inode).unwrap() // Safety: active_node should be valid always
     }
-    
+
     pub(crate) fn get_inode(path: &Path) -> Result<Inode, std::io::Error> {
         Ok(Inode::Real(path.metadata()?.ino()))
     }
-    
+
     #[inline]
     pub(crate) unsafe fn inner_mut(&mut self) -> &mut HashMap<Inode, Buffer> {
         &mut self.inner
@@ -221,7 +224,7 @@ impl Buffers {
                 color: C_LOG_TODO,
                 handler: None,
             });
-            return
+            return;
         }
         buffers.remove_self();
     }
@@ -235,7 +238,7 @@ impl Buffers {
                 color: C_LOG_TODO,
                 handler: None,
             });
-            return
+            return;
         }
         buffers.force_remove_self();
     }
@@ -245,7 +248,6 @@ impl Buffers {
         buffers.open_help()
     }
 }
-
 
 impl Buffers {
     pub(crate) fn remove_self(&mut self) {
@@ -258,6 +260,5 @@ impl Buffers {
     pub(crate) fn force_remove_self(&mut self) {
         self.inner.remove(&self.active_inode);
         self.active_inode = *self.inner.iter().next().unwrap().0; // todo: remove unwrap
-        
     }
 }

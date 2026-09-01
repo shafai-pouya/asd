@@ -5,7 +5,7 @@ use crate::backend::checkpoint::checkpoints::Checkpoints;
 use crate::backend::content::Content;
 use crate::backend::encoding::Encoding;
 use crate::ui::custom_scrollbar::CustomScrollbar;
-use crate::ui::log::{Log, LOGS};
+use crate::ui::log::{LOGS, Log};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -28,7 +28,12 @@ pub(crate) struct Buffer {
 
 impl Buffer {
     pub(crate) fn new_from_file(path: PathBuf) -> Buffer {
-        let showing_filename = path.file_name().unwrap_or(OsStr::new(path.as_os_str())).to_str().unwrap().to_string();
+        let showing_filename = path
+            .file_name()
+            .unwrap_or(OsStr::new(path.as_os_str()))
+            .to_str()
+            .unwrap()
+            .to_string();
         let (encoding, content) = Encoding::from_file(&path);
         Self::new(path, showing_filename, content, encoding)
     }
@@ -36,8 +41,13 @@ impl Buffer {
         let (encoding, content) = Encoding::from_str_utf8(content);
         Self::new(path, showing_filename, content, encoding)
     }
-    
-    pub(crate) fn new(path: PathBuf, showing_filename: String, content: Content, encoding: Encoding) -> Buffer {
+
+    pub(crate) fn new(
+        path: PathBuf,
+        showing_filename: String,
+        content: Content,
+        encoding: Encoding,
+    ) -> Buffer {
         Buffer {
             encoding,
             path,
@@ -52,18 +62,19 @@ impl Buffer {
         }
     }
 
-    
     pub(crate) fn save(&mut self, file_path: Option<&Path>) {
-        if self.encoding.save_buffer(&self.content, file_path.unwrap_or(&self.path)) {
+        if self
+            .encoding
+            .save_buffer(&self.content, file_path.unwrap_or(&self.path))
+        {
             self.modified = false;
         }
     }
-    
+
     #[inline]
     pub(crate) fn commit(&mut self) {
         self.checkpoints.commit(&mut self.carets, &self.content);
     }
-
 
     pub(crate) fn buffer_modified(&mut self) {
         self.modified = true;
