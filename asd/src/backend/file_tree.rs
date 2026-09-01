@@ -1,6 +1,4 @@
-use crate::backend::buffers::Buffers;
 use crate::backend::file_tree_node::FileTreeNode;
-use crate::ui::log::Log;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use std::path::PathBuf;
@@ -65,7 +63,7 @@ impl FileTree {
         self_.root.expand();
         self_
     }
-    pub(crate) fn handle_event(&mut self, event: MouseEvent, buffers: &mut Buffers, logs: &mut Vec<Log>, last_tree_rect: Rect, vic: &mut usize) {
+    pub(crate) fn handle_event(&mut self, event: MouseEvent, last_tree_rect: Rect) {
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {}
             MouseEventKind::ScrollDown => {
@@ -89,7 +87,7 @@ impl FileTree {
         let Ok(pointer) = NodePointer::get_on_nth_line(n, &self) else { return; }; 
 
         let a = self.root.get_mut(&pointer).unwrap(); // Safety: The pointer is valid
-        a.handle_single_click(buffers, logs, vic);
+        a.handle_single_click();
     }
     pub(crate) fn handle_separator_event(&mut self, event: MouseEvent, next_is_separator: &mut bool) {
         match event.kind {
@@ -108,13 +106,13 @@ impl FileTree {
 
         self.width = event.column;
     }
-    pub(crate) fn get_all_texts_from_len(&mut self, start: usize, len: u16, buffers: &Buffers, buffer: &mut ratatui::buffer::Buffer, vic: &mut usize) -> String {
+    pub(crate) fn get_all_texts_from_len(&mut self, start: usize, len: u16, buffer: &mut ratatui::buffer::Buffer) -> String {
         let mut to_return = String::new();
         let Ok(mut ptr) = NodePointer::get_on_nth_line(start, &self) else { 
             return to_return;
         };
         for displaying_row in 0..len {
-            let coloring_x = self.root.r00t_push_string(&ptr, &mut to_return, buffers, vic) as u16;
+            let coloring_x = self.root.r00t_push_string(&ptr, &mut to_return) as u16;
             let coloring_protocol = self.root.get(&ptr).unwrap().get_coloring_proto(); // Safety: The pointer is valid
             coloring_protocol.draw(Rect {
                 x: coloring_x,

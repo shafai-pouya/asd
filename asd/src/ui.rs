@@ -5,3 +5,4 @@ pub mod custom_scrollbar;
 pub mod cursor;
 pub mod log;
 mod render_tree;
+mod scrollbar;

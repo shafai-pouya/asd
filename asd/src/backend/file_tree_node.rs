@@ -1,8 +1,7 @@
 use crate::assets::colors::colors::{C_TREE_FG_DIR, C_TREE_FG_FILE};
 use crate::assets::constants::{TREE_FILE_LOADED_SYMBOL, TREE_FILE_MODIFIED_SYMBOL};
-use crate::backend::buffers::{Buffers, Inode};
+use crate::backend::buffers::{Buffers, Inode, BUFFERS};
 use crate::backend::file_tree::NodePointer;
-use crate::ui::log::Log;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
@@ -108,7 +107,7 @@ impl FileTreeNode {
         }
     }
 
-    pub(crate) fn handle_single_click(&mut self, buffers: &mut Buffers, logs: &mut Vec<Log>, virtual_inode_counter: &mut usize) {
+    pub(crate) fn handle_single_click(&mut self) {
         if self.is_dir {
             if self.expanded {
                 self.expanded = false;
@@ -116,7 +115,7 @@ impl FileTreeNode {
                 self.expand();
             }
         } else {
-            buffers.open_file_or_focus(self.path.clone(), logs, virtual_inode_counter);
+            BUFFERS.get_file_change_guard().open_file_or_focus(self.path.clone());
         }
     }
 
@@ -138,10 +137,10 @@ impl FileTreeNode {
         Some(parent)
     }
 
-    pub(crate) fn r00t_push_string(&mut self, ptr: &NodePointer, str: &mut String, buffers: &Buffers, vic: &mut usize) -> usize {
+    pub(crate) fn r00t_push_string(&mut self, ptr: &NodePointer, str: &mut String) -> usize {
         let mut coloring_start_x = 0;
         str.push(' '); coloring_start_x += 1;
-        str.push(match buffers.get_online_state(self.get_mut(ptr).unwrap().get_inode(vic)) { // The pointer should be valid
+        str.push(match BUFFERS.get_check_guard().get_online_state(self.get_mut(ptr).unwrap().get_inode()) { // The pointer should be valid
             OnlineState::Nothing => ' ',
             OnlineState::Opened => TREE_FILE_LOADED_SYMBOL,
             OnlineState::Modified => TREE_FILE_MODIFIED_SYMBOL,
@@ -171,11 +170,11 @@ impl FileTreeNode {
         coloring_start_x
     }
 
-    pub(crate) fn get_inode(&mut self, vic: &mut usize) -> Inode {
+    pub(crate) fn get_inode(&mut self) -> Inode {
         if let Some(inode) = self.inode {
             inode
         } else {
-            let inode = Buffers::get_inode(&self.path).unwrap_or_else(|_| Inode::virtual_generator(vic));
+            let inode = Buffers::get_inode(&self.path).unwrap_or_else(|_| Inode::new_virtual());
             self.inode = Some(inode);
             inode
         }

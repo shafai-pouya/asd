@@ -9,45 +9,45 @@ use crate::backend::encoding::Encoding;
 use crate::backend::little_string::{LittleString, LittleStringUni};
 use crate::backend::selection::Selection;
 use crate::edit_operators::EditOperators;
-use crate::ui::log::Log;
+use crate::ui::log::{Log, LOGS};
 use crate::{movec, Clipboard};
 use ratatui::layout::Rect;
 use std::io::Write;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// This trait made to be implemented for only one struct. It made
-/// to implement some functions in another file, for readability, 
+/// to implement some functions in another file, for readability,
 /// and also use self with it
 pub trait EditController {
-    fn place_char(&mut self, ch: char, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn place_new_line(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_backspace(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_delete(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_tab(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_scroll_prev(&mut self, i: u16, logs: &mut Vec<Log>);
-    fn operate_scroll_next_line(&mut self, i: usize, logs: &mut Vec<Log>);
-    fn operate_scroll_prev_line(&mut self, i: usize, logs: &mut Vec<Log>);
-    fn operate_scroll_next(&mut self, i: u16, logs: &mut Vec<Log>);
-    fn operate_arrow_begin(&mut self, logs: &mut Vec<Log>);
+    fn place_char(&mut self, ch: char, last_content_rect: Rect);
+    fn place_new_line(&mut self, last_content_rect: Rect);
+    fn operate_backspace(&mut self, last_content_rect: Rect);
+    fn operate_delete(&mut self, last_content_rect: Rect);
+    fn operate_tab(&mut self, last_content_rect: Rect);
+    fn operate_scroll_prev(&mut self, i: u16);
+    fn operate_scroll_next_line(&mut self, i: usize);
+    fn operate_scroll_prev_line(&mut self, i: usize);
+    fn operate_scroll_next(&mut self, i: u16);
+    fn operate_arrow_begin(&mut self);
     fn operate_arrow_end(&mut self, last_content_rect: Rect);
-    fn operate_undo(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_redo(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_copy(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>, clipboard: &mut Clipboard);
-    fn operate_cut(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>, clipboard: &mut Clipboard);
-    fn operate_paste(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>, clipboard: &mut Clipboard);
-    fn operate_save(&mut self, logs: &mut Vec<Log>);
+    fn operate_undo(&mut self, last_content_rect: Rect);
+    fn operate_redo(&mut self, last_content_rect: Rect);
+    fn operate_copy(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard);
+    fn operate_cut(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard);
+    fn operate_paste(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard);
+    fn operate_save(&mut self);
 
-    fn operate_single_click(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_add_cursor(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_mouse_select(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_multicursor_select(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>);
-    fn operate_double_click(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>);
+    fn operate_single_click(&mut self, col: u16, row: u16, last_content_rect: Rect);
+    fn operate_add_cursor(&mut self, col: u16, row: u16, last_content_rect: Rect);
+    fn operate_mouse_select(&mut self, col: u16, row: u16, last_content_rect: Rect);
+    fn operate_multicursor_select(&mut self, col: u16, row: u16, last_content_rect: Rect);
+    fn operate_double_click(&mut self, col: u16, row: u16, last_content_rect: Rect);
 }
 
 impl EditController for Buffer {
-    /// Safety: Make sure the char matches the current encoding 
-    fn place_char(&mut self, ch: char, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
+    /// Safety: Make sure the char matches the current encoding
+    fn place_char(&mut self, ch: char, last_content_rect: Rect) {
+        LOGS.clear();
         self.op_materialize_virtual_spaces();
         for caret_idx in 0..self.carets.carets.len() {
             let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
@@ -103,8 +103,8 @@ impl EditController for Buffer {
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn place_new_line(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
+    fn place_new_line(&mut self, last_content_rect: Rect) {
+        LOGS.clear();
         self.op_no_virtual_spaces();
         for caret_idx in 0..self.carets.carets.len() {
             let ws = whitespaces_in_the_start_of_the_line(&self.content[self.carets.carets[caret_idx].get_position().get_min().0]);
@@ -113,15 +113,15 @@ impl EditController for Buffer {
                 self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(LittleString::empty(), LittleString::from_slice(ws)))
             } // Safety: spaces matches all encodings
         }
-        self.commit(logs);
+        self.commit();
         self.buffer_modified();
         self.carets.merge();
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
 
-    fn operate_backspace(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
+    fn operate_backspace(&mut self, last_content_rect: Rect) {
+        LOGS.clear();
         self.op_no_virtual_spaces();
         if self.carets.any_selected() {
             for caret_idx in 0..self.carets.carets.len() {
@@ -130,7 +130,7 @@ impl EditController for Buffer {
                     self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
-            self.commit(logs);
+            self.commit();
         } else {
             let commit = self.carets.carets.iter().any(|c| c.get_position().cursor().col == 0);
             for caret_idx in 0..self.carets.carets.len() {
@@ -143,16 +143,16 @@ impl EditController for Buffer {
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
             if commit {
-                self.commit(logs);
+                self.commit();
             }
         }
         self.buffer_modified();
         self.carets.merge();
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
-    
-    fn operate_delete(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
+
+    fn operate_delete(&mut self, last_content_rect: Rect) {
+        LOGS.clear();
         self.op_no_virtual_spaces();
         if self.carets.any_selected() {
             for caret_idx in 0..self.carets.carets.len() {
@@ -161,7 +161,7 @@ impl EditController for Buffer {
                     self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
-            self.commit(logs);
+            self.commit();
         } else {
             let commit = self.carets.carets.iter().any(|c| c.get_position().cursor().col == self.content[c.get_position().cursor().line].len());
             for caret_idx in 0..self.carets.carets.len() {
@@ -172,7 +172,7 @@ impl EditController for Buffer {
                 } // Safety: You all placing nothing and don't have to worry about the encoding
             }
             if commit {
-                self.commit(logs);
+                self.commit();
             }
         }
         self.buffer_modified();
@@ -182,9 +182,9 @@ impl EditController for Buffer {
 
 
 
-    fn operate_tab(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>) {
+    fn operate_tab(&mut self, last_content_rect: Rect) {
         // todo: unhandled selection
-        logs.clear();
+        LOGS.clear();
         self.op_materialize_virtual_spaces();
         for caret_idx in 0..self.carets.carets.len() {
             let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
@@ -198,41 +198,41 @@ impl EditController for Buffer {
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn operate_scroll_prev(&mut self, i: u16, logs: &mut Vec<Log>) {
-        logs.clear();
+    fn operate_scroll_prev(&mut self, i: u16) {
+        LOGS.clear();
         self.scrollbar.prev(i);
     }
-    fn operate_scroll_next_line(&mut self, i: usize, logs: &mut Vec<Log>) {
-        logs.clear();
+    fn operate_scroll_next_line(&mut self, i: usize) {
+        LOGS.clear();
         self.scrollbar.next_line(i);
     }
-    fn operate_scroll_prev_line(&mut self, i: usize, logs: &mut Vec<Log>) {
-        logs.clear();
+    fn operate_scroll_prev_line(&mut self, i: usize) {
+        LOGS.clear();
         self.scrollbar.prev_line(i);
     }
-    fn operate_scroll_next(&mut self, i: u16, logs: &mut Vec<Log>) {
-        logs.clear();
+    fn operate_scroll_next(&mut self, i: u16) {
+        LOGS.clear();
         self.scrollbar.next(i);
     }
-    fn operate_arrow_begin(&mut self, logs: &mut Vec<Log>) {
-        logs.clear();
-        self.commit(logs);
+    fn operate_arrow_begin(&mut self) {
+        LOGS.clear();
+        self.commit();
     }
     fn operate_arrow_end(&mut self, last_content_rect: Rect) {
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
-    
-    fn operate_undo(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        self.commit(logs);
+
+    fn operate_undo(&mut self, last_content_rect: Rect) {
+        self.commit();
         if self.checkpoints.cursor_lened == 0 {
-            logs.push(Log {
+            LOGS.push(Log {
                 message: "[I] No more checkpoints available".to_string(),
                 color: C_LOG_INFO,
                 handler: None,
             });
             return;
         }
-        logs.clear();
+        LOGS.clear();
 
         self.checkpoints.cursor_lened -= 1;
         let checkpoint = &self.checkpoints.others[self.checkpoints.cursor_lened];
@@ -266,17 +266,17 @@ impl EditController for Buffer {
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn operate_redo(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        self.commit(logs);
+    fn operate_redo(&mut self, last_content_rect: Rect) {
+        self.commit();
         if self.checkpoints.cursor_lened == self.checkpoints.others.len() {
-            logs.push(Log {
+            LOGS.push(Log {
                 message: "[I] No more checkpoints available".to_string(),
                 color: C_LOG_INFO,
                 handler: None,
             });
             return;
         }
-        logs.clear();
+        LOGS.clear();
 
         let checkpoint = &self.checkpoints.others[self.checkpoints.cursor_lened];
         self.checkpoints.cursor_lened += 1;
@@ -310,44 +310,44 @@ impl EditController for Buffer {
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn operate_copy(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>, clipboard: &mut Clipboard) {
-        logs.clear();
+    fn operate_copy(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard) {
+        LOGS.clear();
         self.op_no_virtual_spaces();
-        self.commit(logs);
+        self.commit();
 
-        self.op_copy(logs, clipboard);
-        
+        self.op_copy(clipboard);
+
         self.carets.merge();
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn operate_cut(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>, clipboard: &mut Clipboard) {
-        logs.clear();
+    fn operate_cut(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard) {
+        LOGS.clear();
         self.op_no_virtual_spaces();
 
-        self.commit(logs);
-        self.op_copy(logs, clipboard);
+        self.commit();
+        self.op_copy(clipboard);
         for caret_idx in 0..self.carets.carets.len() {
             let mut cursor_editor = CursorEditor { cursors: &mut self.carets, cursor: caret_idx };
             unsafe {
                 self.content.replace_text(&mut self.checkpoints, &mut cursor_editor, movec!())
             } // Safety: You all placing nothing and don't have to worry about the encoding
         }
-        self.commit(logs);
+        self.commit();
 
         self.buffer_modified();
         self.carets.merge();
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn operate_paste(&mut self, last_content_rect: Rect, logs: &mut Vec<Log>, clipboard: &mut Clipboard) {
-        logs.clear();
+    fn operate_paste(&mut self, last_content_rect: Rect, clipboard: &mut Clipboard) {
+        LOGS.clear();
 
-        self.commit(logs);
+        self.commit();
         self.op_materialize_virtual_spaces();
-        
-        let Some(clipboard) = self.op_get_each_cursor_clipboard(logs, clipboard)
-            else { return; };
+
+        let Some(clipboard) = self.op_get_each_cursor_clipboard(clipboard)
+        else { return; };
         clipboard.1.into_map_enumerate(|(idx, to_place)| {
             let mut ce = CursorEditor { cursor: idx, cursors: &mut self.carets };
             unsafe {
@@ -357,22 +357,22 @@ impl EditController for Buffer {
             }
         });
 
-        self.commit(logs);
-        
-        
+        self.commit();
+
+
         self.buffer_modified();
         self.carets.merge();
         self.carets.ensure_cursors_visible(&mut self.scrollbar, last_content_rect);
     }
 
-    fn operate_save(&mut self, logs: &mut Vec<Log>) {
-        self.commit(logs);
-        self.save(None, logs);
+    fn operate_save(&mut self) {
+        self.commit();
+        self.save(None);
     }
 
-    fn operate_single_click(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
-        self.commit(logs);
+    fn operate_single_click(&mut self, col: u16, row: u16, last_content_rect: Rect) {
+        LOGS.clear();
+        self.commit();
 
         let x = (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize;
         let y = (row.wrapping_sub(last_content_rect.y)) as usize + self.scrollbar.top_position;
@@ -384,9 +384,9 @@ impl EditController for Buffer {
         self.drag_start_pos = (x, y);
     }
 
-    fn operate_add_cursor(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
-        self.commit(logs);
+    fn operate_add_cursor(&mut self, col: u16, row: u16, last_content_rect: Rect) {
+        LOGS.clear();
+        self.commit();
 
         self.carets.add_cursor(
             (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize,
@@ -395,9 +395,9 @@ impl EditController for Buffer {
         );
     }
 
-    fn operate_mouse_select(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
-        self.commit(logs);
+    fn operate_mouse_select(&mut self, col: u16, row: u16, last_content_rect: Rect) {
+        LOGS.clear();
+        self.commit();
 
         let cert_ptr = &mut self.carets.carets[0];
         if cert_ptr.is_selection_none() {
@@ -410,9 +410,9 @@ impl EditController for Buffer {
         );
     }
 
-    fn operate_multicursor_select(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
-        self.commit(logs);
+    fn operate_multicursor_select(&mut self, col: u16, row: u16, last_content_rect: Rect) {
+        LOGS.clear();
+        self.commit();
 
         let x = (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize;
         let y = row.wrapping_sub(last_content_rect.y) as usize + self.scrollbar.top_position;
@@ -438,9 +438,9 @@ impl EditController for Buffer {
 
     }
 
-    fn operate_double_click(&mut self, col: u16, row: u16, last_content_rect: Rect, logs: &mut Vec<Log>) {
-        logs.clear();
-        self.commit(logs);
+    fn operate_double_click(&mut self, col: u16, row: u16, last_content_rect: Rect) {
+        LOGS.clear();
+        self.commit();
 
         let x = (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize;
         let y = (row.wrapping_sub(last_content_rect.y)) as usize + self.scrollbar.top_position;

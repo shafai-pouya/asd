@@ -1,12 +1,12 @@
 use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL, C_FG_BAR};
-use crate::App;
+use crate::backend::buffers::BuffersRenderGuard;
 use chrono::Local;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
 
-pub(crate) fn render_bar(app: &App, bar: Rect, under_bar: Rect, buf: &mut Buffer) {
+pub(crate) fn render_bar(bar: Rect, under_bar: Rect, buf: &mut Buffer, buffers: &mut BuffersRenderGuard) {
     Block::default()
         .bg(C_BG_BAR)
         .fg(C_FG_BAR)
@@ -17,11 +17,13 @@ pub(crate) fn render_bar(app: &App, bar: Rect, under_bar: Rect, buf: &mut Buffer
 
     let mut flags = String::new();
 
-    if app.buffers.active().modified {
+    let active_buffer = buffers.inner().active();
+
+    if active_buffer.modified {
         flags.push_str(" [+]"); // todo: maybe will change it to all buffers?
     }
 
-    if app.buffers.active().scrollbar.freeze {
+    if active_buffer.scrollbar.freeze {
         flags.push_str(" ⏸"); // todo: maybe will change it to all buffers?
     }
 
@@ -30,9 +32,9 @@ pub(crate) fn render_bar(app: &App, bar: Rect, under_bar: Rect, buf: &mut Buffer
             .map(|_| flags.push(' ')).collect::<Vec<_>>();
 
 
-    let left_str = format!(" {}{} {}", app.buffers.active().showing_filename, flags, app.buffers.active().carets); // todo: maybe will change it to all buffers?
+    let left_str = format!(" {}{} {}", active_buffer.showing_filename, flags, active_buffer.carets); // todo: maybe will change it to all buffers?
 
-    let right_str = format!("{}    {} ", app.buffers.active().encoding, Local::now().format("%H:%M")); // todo: maybe will change it to all buffers?
+    let right_str = format!("{}    {} ", active_buffer.encoding, Local::now().format("%H:%M")); // todo: maybe will change it to all buffers?
 
     let horizontal = Layout::horizontal([
         Constraint::Min(0),

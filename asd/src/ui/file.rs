@@ -1,9 +1,11 @@
 use crate::assets::colors::colors::{C_BG_CURSOR, C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR, C_FG_CURSOR_SELECTION, C_FG_LINE_NUMBERS, C_FG_SELECTION};
+use crate::backend::buffers::BuffersRenderGuard;
 use crate::backend::caret::Carets;
 use crate::backend::content::Content;
 use crate::backend::display_string::DisplaySlice;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::custom_scrollbar::CustomScrollbar;
+use crate::ui::scrollbar::render_scrollbar;
 use crate::App;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Alignment;
@@ -13,7 +15,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Paragraph, Widget};
 use std::cmp::Ordering;
 
-pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect, buf: &mut Buffer, can_use_cursor: bool) -> (Rect, Vec<(u16, u16, u32)>) {
+pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect, buf: &mut Buffer, can_use_cursor: bool, buffers: &mut BuffersRenderGuard) -> (Rect, Vec<(u16, u16, u32)>) {
     // Layout split
     let layout = Layout::horizontal([
         Constraint::Length(6),
@@ -27,7 +29,7 @@ pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect
         .render(lines_area, buf);
 
     // Other logic
-    let active_buffer = app.buffers.active_mut();
+    let active_buffer = buffers.inner_mut().active_mut();
     active_buffer.scrollbar.validate_position(&active_buffer.content, content_area);
     
     let mut emoji_queue = vec![];
@@ -59,7 +61,7 @@ pub(crate) fn render_file(app: &mut App, file_area: Rect, file_scroll_area: Rect
     )
         .render(lines_area, buf);
 
-    active_buffer.scrollbar.render(file_scroll_area, content_area, buf, &active_buffer.content);
+    render_scrollbar(file_scroll_area, content_area, buf, active_buffer);
 
     active_buffer.carets.merge(); // todo: I think need to delete this
 

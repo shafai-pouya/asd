@@ -6,8 +6,7 @@ mod edit_controller;
 
 use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_HINT};
 use crate::assets::constants::POLL_DURATION;
-use crate::backend::buffer::Buffer;
-use crate::backend::buffers::{Buffers, Inode};
+use crate::backend::buffers::BUFFERS;
 use crate::backend::encoding::Encoding;
 use crate::backend::file_tree::FileTree;
 use crate::backend::little_string::LittleString;
@@ -16,15 +15,13 @@ use crate::backend::modes::Mode;
 use crate::backend::mostly_one_vec::MostlyOneVec;
 use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
-use crate::ui::log::Log;
+use crate::ui::log::{Log, LOGS};
 use crossterm::cursor::SetCursorStyle;
 use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind};
 use crossterm::execute;
-use crossterm::style::{ResetColor, SetForegroundColor};
 use crossterm::terminal::{enable_raw_mode, EnterAlternateScreen};
 use ratatui::layout::Position;
 use ratatui::{layout::Rect, DefaultTerminal, Frame};
-use std::collections::HashMap;
 use std::env::args;
 #[cfg(debug_assertions)]
 use std::fs::OpenOptions;
@@ -38,12 +35,8 @@ pub struct App {
     /// If actives, The application exits in the next loop
     exit: bool,
 
-    buffers: Buffers,
-
     /// The file tree
     file_tree: Option<FileTree>,
-
-    pub logs: Vec<Log>,
 
     /// Used for setting the real terminal cursor
     terminal_cursor: TerminalCursor,
@@ -60,9 +53,6 @@ pub struct App {
     /// If actives, The mode will change for the next loop
     change_mode: Option<Box<dyn Mode>>,
     next_is_separator_event: bool,
-
-
-    pub virtual_inode_counter: usize,
 
     // todo: Make system-wise clipboard
     pub internal_clipboard: Clipboard,
@@ -91,28 +81,16 @@ impl App {
     #[inline]
     fn file(path: &str) -> Self {
         let path = Path::new(path);
-        let mut logs = vec![
-            Log {
-                message: "If you want help, click here".to_string(),
-                color: C_LOG_HINT,
-                handler: Some(|me, app| {
-                    if let MouseEventKind::Down(MouseButton::Left) = me.kind {
-                        app.buffers.open_help(&mut app.virtual_inode_counter);
-                    };
-                }),
-            }
-        ];
-        let mut vic = 0;
-        let mut hm = HashMap::new();
-        let inode = Buffers::get_inode(&path).unwrap_or_else(|e| {
-            logs.push(Log {
-                message: format!("Failed to get Inode: {e}"),
-                color: C_LOG_ERROR,
-                handler: None,
-            });
-            Inode::virtual_generator(&mut vic)
+        LOGS.push(Log {
+            message: "If you want help, click here".to_string(),
+            color: C_LOG_HINT,
+            handler: Some(|me, _| {
+                if let MouseEventKind::Down(MouseButton::Left) = me.kind {
+                    BUFFERS.get_file_change_guard().open_help();
+                };
+            }),
         });
-        hm.insert(inode, Buffer::new_from_file(PathBuf::from(path), &mut logs));
+        BUFFERS.get_file_change_guard().open_file_or_focus(path.to_path_buf());
         let is_dir = match path.metadata() {
             Ok(meta) => meta.file_type().is_dir(),
             Err(_) => false,
@@ -123,11 +101,6 @@ impl App {
             None
         };
         Self {
-            buffers: Buffers::new(
-                hm,
-                inode
-            ),
-            virtual_inode_counter: vic,
             exit: false,
             next_is_separator_event: false,
             file_tree,
@@ -137,16 +110,12 @@ impl App {
             last_tree_and_content_separator_rect: Rect::default(),
             double_click_details: (u16::MAX, u16::MAX, Instant::now()),
             change_mode: None,
-            logs,
             internal_clipboard: (Encoding::Raw, movec![]),
         }
     }
     fn help() -> Self {
-        let logs = vec![];
-        let mut vic = 0;
+        BUFFERS.get_file_change_guard().open_help();
         Self {
-            buffers: Buffers::help(&mut vic),
-            virtual_inode_counter: vic,
             exit: false,
             next_is_separator_event: false,
             file_tree: None,
@@ -156,7 +125,6 @@ impl App {
             last_tree_and_content_separator_rect: Rect::default(),
             double_click_details: (u16::MAX, u16::MAX, Instant::now()),
             change_mode: None,
-            logs,
             internal_clipboard: (Encoding::Raw, movec![]),
         }
     }
@@ -168,7 +136,7 @@ impl App {
         while !self.exit {
             self.draw(terminal, mode);
             self.handle_events(mode);
-            self.handle_checkpoint_timers();
+            BUFFERS.handle_checkpoint_timers();
         }
     }
 
@@ -193,25 +161,26 @@ impl App {
     #[inline]
     fn handle_event(&mut self, mode: &mut Box<dyn Mode>, event: Event) {
         match event {
-            Event::Mouse(me)
-                if me.row > self.last_content_rect.height + 1 - self.logs.len() as u16 &&
-                    self.logs.get(me.row as usize + self.logs.len() - 2 - self.last_content_rect.height as usize)
-                        .map(|l| l.handler.is_some()).unwrap_or(false)
-            => {
-                let handler = self.logs.get(me.row as usize + self.logs.len() - 2 - self.last_content_rect.height as usize).unwrap().handler.unwrap();
-                handler(me, self);
-            }
-            Event::Mouse(me)
-            if self.next_is_separator_event ||
-                self.last_tree_and_content_separator_rect.contains(Position::new(me.column, me.row)) => {
-                self.file_tree.as_mut().unwrap().handle_separator_event(
-                    me, &mut self.next_is_separator_event
-                ) // Safety: last_tree_rect should be empty when file tree isn't present
-            }
-            Event::Mouse(me) if self.last_tree_rect.contains(Position::new(me.column, me.row)) => {
-                self.file_tree.as_mut().unwrap().handle_event(
-                    me, &mut self.buffers, &mut self.logs, self.last_tree_rect, &mut self.virtual_inode_counter
-                ) // Safety: last_tree_rect should be empty when file tree isn't present
+            Event::Mouse(me) => {
+                if let Some(handler) = LOGS.handler_of_mouse_event(me, self.last_content_rect) {
+                    handler(me, self)
+                } else if self.next_is_separator_event ||
+                    self.last_tree_and_content_separator_rect.contains(Position::new(me.column, me.row))
+                {
+
+                    self.file_tree.as_mut().unwrap().handle_separator_event(
+                        me, &mut self.next_is_separator_event
+                    ) // Safety: last_tree_rect should be empty when file tree isn't present
+                } else if self.last_tree_rect.contains(Position::new(me.column, me.row)) {
+                    self.file_tree.as_mut().unwrap().handle_event(
+                        me, self.last_tree_rect
+                    ) // Safety: last_tree_rect should be empty when file tree isn't present
+                } else {
+                    mode.handle_event(self, event);
+                    if let Some(m) = self.change_mode.take() {
+                        *mode = m;
+                    }
+                }
             }
             _ => {
                 mode.handle_event(self, event);
@@ -224,44 +193,25 @@ impl App {
 
     #[inline]
     fn render(&mut self, frame: &mut Frame, mode: &mut Box<dyn Mode>) -> Vec<(u16, u16, u32)> {
-        let emoji_queue = render_base(self, frame, !mode.needs_terminal_cursor());
+        let mut buffers = BUFFERS.get_render_guard();
+        let emoji_queue = render_base(self, frame, !mode.needs_terminal_cursor(), &mut buffers);
         mode.render_function(frame);
         emoji_queue
     }
 
-    #[inline]
-    fn handle_checkpoint_timers(&mut self) {
-        let now = Instant::now();
-
-        for (_, buffer) in unsafe { self.buffers.inner_mut() } {
-            if let Some(t) = buffer.checkpoints.little_timer_deadline {
-                if now >= t {
-                    buffer.checkpoints.little_timer_deadline = None;
-                    buffer.commit(&mut self.logs);
-                }
-            }
-
-            if let Some(t) = buffer.checkpoints.big_timer_deadline {
-                if now >= t {
-                    buffer.checkpoints.big_timer_deadline = None;
-                    buffer.commit(&mut self.logs);
-                }
-            }
-        }
-    }
-
-    fn operate_quit(&mut self, ) {
-        self.buffers.commit_all(&mut self.logs);
-        if !self.buffers.any_modified() {
+    fn operate_quit(&mut self) {
+        let mut buffers = BUFFERS.get_check_guard();
+        buffers.commit_all();
+        if !buffers.any_modified() {
             self.exit = true;
             return;
         }
-        self.logs.push(Log {
+        LOGS.push(Log {
             message: "[E:i1] Cannot exit: modified buffer exists".to_string(),
             color: C_LOG_ERROR,
             handler: None,
         });
-        self.logs.push(Log {
+        LOGS.push(Log {
             message: "[HINT] Use ctrl+alt+q if you sure you want to exit".to_string(),
             color: C_LOG_HINT,
             handler: None,

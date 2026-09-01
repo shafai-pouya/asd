@@ -5,7 +5,7 @@ use crate::backend::checkpoint::checkpoints::Checkpoints;
 use crate::backend::content::Content;
 use crate::backend::encoding::Encoding;
 use crate::ui::custom_scrollbar::CustomScrollbar;
-use crate::ui::log::Log;
+use crate::ui::log::{Log, LOGS};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -13,7 +13,7 @@ use std::time::Instant;
 pub(crate) struct Buffer {
     pub path: PathBuf,
     pub showing_filename: String,
-    
+
     pub carets: Carets,
     pub scrollbar: CustomScrollbar,
     pub drag_start_pos: (usize, usize),
@@ -27,9 +27,9 @@ pub(crate) struct Buffer {
 }
 
 impl Buffer {
-    pub(crate) fn new_from_file(path: PathBuf, logs: &mut Vec<Log>) -> Buffer {
+    pub(crate) fn new_from_file(path: PathBuf) -> Buffer {
         let showing_filename = path.file_name().unwrap_or(OsStr::new(path.as_os_str())).to_str().unwrap().to_string();
-        let (encoding, content) = Encoding::from_file(&path, logs);
+        let (encoding, content) = Encoding::from_file(&path);
         Self::new(path, showing_filename, content, encoding)
     }
     pub(crate) fn new_custom(path: PathBuf, showing_filename: String, content: &str) -> Self {
@@ -53,15 +53,15 @@ impl Buffer {
     }
 
     
-    pub(crate) fn save(&mut self, file_path: Option<&Path>, logs: &mut Vec<Log>) {
-        if self.encoding.save_buffer(&self.content, file_path.unwrap_or(&self.path), logs) {
+    pub(crate) fn save(&mut self, file_path: Option<&Path>) {
+        if self.encoding.save_buffer(&self.content, file_path.unwrap_or(&self.path)) {
             self.modified = false;
         }
     }
     
     #[inline]
-    pub(crate) fn commit(&mut self, logs: &mut Vec<Log>) {
-        self.checkpoints.commit(&mut self.carets, logs, &self.content);
+    pub(crate) fn commit(&mut self) {
+        self.checkpoints.commit(&mut self.carets, &self.content);
     }
 
 
@@ -72,9 +72,9 @@ impl Buffer {
         }
     }
 
-    pub(crate) fn try_quit(&mut self, logs: &mut Vec<Log>) -> Result<(), ()> {
+    pub(crate) fn try_quit(&mut self) -> Result<(), ()> {
         if self.modified {
-            logs.push(Log {
+            LOGS.push(Log {
                 message: "Buffer is modified, try save it first".to_string(),
                 color: C_LOG_INFO,
                 handler: None,

@@ -2,7 +2,7 @@ use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
 use crate::backend::content::Content;
 use crate::backend::display_char::DisplayChar;
 use crate::backend::display_string::DisplayString;
-use crate::ui::log::Log;
+use crate::ui::log::{Log, LOGS};
 use libc::{access, W_OK, X_OK};
 use std::ffi::CString;
 use std::fmt::Display;
@@ -37,7 +37,7 @@ impl LineEnding {
 }
 
 impl Encoding {
-    pub(crate) fn save_buffer(&self, content: &Content, file_path: &Path, logs: &mut Vec<Log>) -> bool {
+    pub(crate) fn save_buffer(&self, content: &Content, file_path: &Path) -> bool {
         match File::options().write(true).truncate(true).create(true).open(file_path) {
             Ok(mut file) => {
                 match self {
@@ -48,7 +48,7 @@ impl Encoding {
                                 match file.write_all(ending.get()) {
                                     Ok(_) => {},
                                     Err(e) => {
-                                        logs.push(Log {
+                                        LOGS.push(Log {
                                             message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
                                             color: C_LOG_ERROR,
                                             handler: None,
@@ -61,7 +61,7 @@ impl Encoding {
                             match unsafe { line.utf8__write_to(&mut file) } { // Safety: We know it's utf8
                                 Ok(_) => {},
                                 Err(e) => {
-                                    logs.push(Log {
+                                    LOGS.push(Log {
                                         message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
                                         color: C_LOG_ERROR,
                                         handler: None,
@@ -76,7 +76,7 @@ impl Encoding {
                             match unsafe { line.raw__write_to(&mut file) } {
                                 Ok(_) => {}
                                 Err(e) => {
-                                    logs.push(Log {
+                                    LOGS.push(Log {
                                         message: format!("[E:{}] Error writing to file: {}", e.kind() as u32, e.kind().to_string()),
                                         color: C_LOG_ERROR,
                                         handler: None,
@@ -88,7 +88,7 @@ impl Encoding {
                     }
                 }
 
-                logs.push(Log {
+                LOGS.push(Log {
                     message: "[I:1] File Saved!".to_string(),
                     color: Default::default(),
                     handler: None,
@@ -96,7 +96,7 @@ impl Encoding {
                 true
             }
             Err(e) => {
-                logs.push(Log {
+                LOGS.push(Log {
                     message: format!("[E:{}] Error opening file to save: {}", e.kind() as u32, e.kind().to_string()),
                     color: C_LOG_ERROR,
                     handler: None,
@@ -107,12 +107,12 @@ impl Encoding {
     }
 
 
-    pub(crate) fn from_file(path: &Path, logs: &mut Vec<Log>) -> (Encoding, Content) {
+    pub(crate) fn from_file(path: &Path) -> (Encoding, Content) {
         let content;
         // let mut logs = Vec::new();
         match fs::exists(path) {
             Err(e) => {
-                logs.push(Log {
+                LOGS.push(Log {
                     message: format!("[E:{}] Error checking existence of the file: {}", e.kind() as u32, e.kind().to_string()),
                     color: C_LOG_ERROR,
                     handler: None,
@@ -120,7 +120,7 @@ impl Encoding {
                 content = String::new();
             }
             Ok(false) => {
-                logs.push(Log {
+                LOGS.push(Log {
                     message: "[I] Created new file".to_string(), // todo: maybe couldn't
                     color: C_LOG_INFO,
                     handler: None,
@@ -131,7 +131,7 @@ impl Encoding {
                     let result = unsafe { access(parent.as_ptr(), W_OK | X_OK) };
                     drop(parent);
                     if result != 0 {
-                        logs.push(Log {
+                        LOGS.push(Log {
                             message: "[W] Warning: You will fail to save the file, I think...".to_string(), // todo: maybe couldn't
                             color: C_LOG_WARNING,
                             handler: None,
@@ -146,12 +146,12 @@ impl Encoding {
                         match File::options().append(true).open(path) {
                             Ok(f) => drop(f),
                             Err(e) => {
-                                logs.push(Log {
+                                LOGS.push(Log {
                                     message: format!("[E:{}] Error Opening File for in append mode: {}", e.kind() as u32, e.kind().to_string()),
                                     color: C_LOG_ERROR,
                                     handler: None,
                                 });
-                                logs.push(Log {
+                                LOGS.push(Log {
                                     message: "[I] It means the file is readonly!".to_string(),
                                     color: C_LOG_INFO,
                                     handler: None,
@@ -161,9 +161,9 @@ impl Encoding {
                     }
                     Err(e) => {
                         if e.kind() == ErrorKind::InvalidData {
-                            return Self::from_file_raw(path, logs);
+                            return Self::from_file_raw(path);
                         } else {
-                            logs.push(Log {
+                            LOGS.push(Log {
                                 message: format!("[E:{}] Error Opening File for the first time: {}", e.kind() as u32, e.kind().to_string()),
                                 color: C_LOG_ERROR,
                                 handler: None,
@@ -202,7 +202,7 @@ impl Encoding {
         (Encoding::UTF8(line_ending.unwrap_or(LineEnding::CRLF)), Content::from_lines(lines))
     }
 
-    pub(crate) fn from_file_raw(path: &Path, _logs: &mut Vec<Log>) -> (Self, Content) {
+    pub(crate) fn from_file_raw(path: &Path) -> (Self, Content) {
         let mut file = File::options().read(true).open(path)
             .unwrap(); // todo: remove unwrap
         let mut last = DisplayString::empty();

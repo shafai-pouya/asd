@@ -1,3 +1,5 @@
+use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL};
+use crate::backend::buffers::BuffersRenderGuard;
 use crate::ui::bar::render_bar;
 use crate::ui::file::render_file;
 use crate::ui::log::{get_logs_height, render_logs};
@@ -7,11 +9,10 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::widgets::{Block, Widget};
 use ratatui::Frame;
-use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL};
 
-pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool) -> Vec<(u16, u16, u32)> {
+pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool, buffers: &mut BuffersRenderGuard) -> Vec<(u16, u16, u32)> {
     let rows = Layout::vertical([
-        Constraint::default(), Constraint::Length(1), Constraint::Length(get_logs_height(app)), Constraint::Length(1)
+        Constraint::default(), Constraint::Length(1), Constraint::Length(get_logs_height()), Constraint::Length(1)
     ]);
     let [base_area, bar, logs_area, under_bar] = frame.area().layout(&rows);
 
@@ -43,9 +44,9 @@ pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool
         .render(logs_area, frame.buffer_mut());
 
 
-    render_bar(app, bar, under_bar, frame.buffer_mut());
+    render_bar(bar, under_bar, frame.buffer_mut(), buffers);
 
-    let (returned_content_rect, emoji_queue) = render_file(app, file_area, scroll_area, frame.buffer_mut(), can_use_cursor);
+    let (returned_content_rect, emoji_queue) = render_file(app, file_area, scroll_area, frame.buffer_mut(), can_use_cursor, buffers);
     let last_content_rect = Rect {
         height: frame.area().height - 3,
         ..returned_content_rect
@@ -64,7 +65,7 @@ pub(crate) fn render_base(app: &mut App, frame: &mut Frame, can_use_cursor: bool
         ..separator_area
     };
 
-    render_logs(app, frame, logs_area);
+    render_logs(frame, logs_area);
     
     emoji_queue
 }

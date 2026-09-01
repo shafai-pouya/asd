@@ -6,7 +6,7 @@ use crate::backend::checkpoint::checkpoint_line::CheckpointEdit;
 use crate::backend::content::Content;
 use crate::backend::little_string::LittleString;
 use crate::movec;
-use crate::ui::log::Log;
+use crate::ui::log::{Log, LOGS};
 use std::time::Instant;
 
 pub(crate) struct Checkpoints {
@@ -17,7 +17,7 @@ pub(crate) struct Checkpoints {
 }
 
 impl Checkpoints {
-    pub(crate) fn commit(&mut self, carets: &mut Carets, logs: &mut Vec<Log>, content: &Content) {
+    pub(crate) fn commit(&mut self, carets: &mut Carets, content: &Content) {
         self.little_timer_deadline = None;
         self.big_timer_deadline = None;
         if carets.carets.iter().any(|c| {
@@ -79,19 +79,19 @@ impl Checkpoints {
                         edit
                     })
                     .collect(),
-            }, logs)
+            })
     }
 }
 
 impl Checkpoints {
-    pub(crate) fn push(&mut self, checkpoint: Checkpoint, logs: &mut Vec<Log>) {
+    pub(crate) fn push(&mut self, checkpoint: Checkpoint) {
         self.others.truncate(self.cursor_lened);
         self.others.push(checkpoint);
         self.cursor_lened += 1;
         if self.cursor_lened >= N_MAX_CHECKPOINTS {
             self.others.drain(..N_DRAIN_CHECKPOINTS);
             self.cursor_lened = self.others.len();
-            logs.push(Log {
+            LOGS.push(Log {
                 message: "Removed some old checkpoints...".to_string(),
                 color: C_LOG_INFO,
                 handler: None,

@@ -3,7 +3,6 @@ use crate::backend::caret::{CursorEditor, Position};
 use crate::backend::cursor::Cursor;
 use crate::backend::little_string::LittleString;
 use crate::backend::selection::Selection;
-use crate::ui::log::Log;
 use crate::{movec, Clipboard};
 
 /// This trait made to be implemented for only one struct. It made
@@ -14,8 +13,8 @@ pub trait EditOperators {
     fn op_materialize_virtual_spaces(&mut self);
     fn op_no_virtual_spaces(&mut self);
     fn op_get_tab_little_string(ce: &CursorEditor, tab_size: usize) -> LittleString;
-    fn op_copy(&mut self, logs: &mut Vec<Log>, clipboard: &mut Clipboard);
-    fn op_get_each_cursor_clipboard(&mut self, logs: &mut Vec<Log>, clipboard: &mut Clipboard) -> Option<Clipboard>;
+    fn op_copy(&mut self, clipboard: &mut Clipboard);
+    fn op_get_each_cursor_clipboard(&mut self, clipboard: &mut Clipboard) -> Option<Clipboard>;
 }
 
 impl EditOperators for Buffer {
@@ -81,19 +80,19 @@ impl EditOperators for Buffer {
             self.carets.carets[i].merge_sel_pos()
         }
     }
-    
+
     fn op_get_tab_little_string(ce: &CursorEditor, tab_size: usize) -> LittleString {
         let tab_len = tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor().col % tab_size);
         LittleString::from_spaces_repeated(tab_len)
     }
 
-    fn op_copy(&mut self, _logs: &mut Vec<Log>, clipboard: &mut Clipboard) {
+    fn op_copy(&mut self, clipboard: &mut Clipboard) {
         unsafe {
             *clipboard = (self.encoding, self.content.get_selected_texts_to_copy(&self.carets));
         }
     }
 
-    fn op_get_each_cursor_clipboard(&mut self, _logs: &mut Vec<Log>, clipboard: &mut Clipboard) -> Option<Clipboard> {
+    fn op_get_each_cursor_clipboard(&mut self, clipboard: &mut Clipboard) -> Option<Clipboard> {
         if self.carets.carets.len() == clipboard.1.len() {
             Some(clipboard.clone())
         } else if self.carets.carets.len() == 1 {

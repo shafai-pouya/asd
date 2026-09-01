@@ -1,11 +1,12 @@
 use crate::assets::colors::colors::{C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR, C_LOG_INFO, C_LOG_TODO};
+use crate::backend::buffers::BUFFERS;
 use crate::backend::display_string::DisplayString;
 use crate::backend::encoding::{Encoding, LineEnding};
 use crate::backend::event_handler::EventHandler;
 use crate::backend::little_string::LittleString;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::modes::Mode;
-use crate::ui::log::Log;
+use crate::ui::log::{Log, LOGS};
 use crate::{movec, App};
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::layout::Rect;
@@ -31,26 +32,28 @@ impl Mode for SaveAsMode {
     fn handle_event(&mut self, app: &mut App, event: Event) {
         self.data.last_content_rect = app.last_content_rect;
 
-        let prev_count = app.logs.len();
+        // Todo make the way this function working better
+
+        let prev_count = LOGS.len();
         self.event_handler.handle_event(&mut self.data, app, event);
-        for i in prev_count..app.logs.len() {
-            self.my_logs_collected.push(app.logs[i].clone())
+        for i in prev_count..LOGS.len() {
+            self.my_logs_collected.push(LOGS.get_clone(i).unwrap())
         }
 
         if app.change_mode.is_some() {
             return;
         }
 
-        app.logs.clear();
+        LOGS.clear();
         for i in &self.my_logs_collected {
-            app.logs.push(i.clone());
+            LOGS.push(i.clone());
         }
-        app.logs.push(Log {
+        LOGS.push(Log {
             message: "Save to file:".to_string(),
             color: C_LOG_INFO,
             handler: None,
         });
-        app.logs.push(Log {
+        LOGS.push(Log {
             message: self.data.filepath.clone(),
             color: C_LOG_INFO,
             handler: None,
@@ -128,15 +131,16 @@ impl SaveAsMode {
                          if e.modifiers == KeyModifiers::empty() &&
                              KeyCode::Enter == e.code {
                              app.change_mode = Some(Box::new(EditorMode::new()));
-                             app.logs.clear();
-                             let active_buffer = app.buffers.active_mut();
-                             active_buffer.save(Some(Path::new(&data.filepath)), &mut app.logs);
+                             LOGS.clear();
+                             let mut buffers = BUFFERS.get_change_guard();
+                             let active_buffer = buffers.inner_mut().active_mut();
+                             active_buffer.save(Some(Path::new(&data.filepath)));
                              active_buffer.modified = true;
                              return false;
                          }
                          if e.modifiers == KeyModifiers::empty() &&
                              KeyCode::Tab == e.code {
-                             app.logs.push(Log {
+                             LOGS.push(Log {
                                  message: "Autocompletion is not implemented yet (todo)".to_string(),
                                  color: C_LOG_TODO,
                                  handler: None,
@@ -153,7 +157,7 @@ impl SaveAsMode {
                         if e.modifiers == KeyModifiers::empty() &&
                             e.code == KeyCode::Esc {
                             app.change_mode = Some(Box::new(EditorMode::new()));
-                            app.logs.clear();
+                            LOGS.clear();
                         }
 
                         match e.code {
@@ -172,7 +176,7 @@ impl SaveAsMode {
                             KeyCode::Char('v') => {
                                 let clip = &app.internal_clipboard;
                                 if clip.1.len() != 1 {
-                                    app.logs.push(Log {
+                                    LOGS.push(Log {
                                         message: "There is enter in your pasting thingy".to_string(),
                                         color: C_LOG_ERROR,
                                         handler: None,
@@ -180,7 +184,7 @@ impl SaveAsMode {
                                     return false;
                                 }
                                 if clip.1[0].len() != 1 {
-                                    app.logs.push(Log {
+                                    LOGS.push(Log {
                                         message: "There is enter in your pasting thingy".to_string(),
                                         color: C_LOG_ERROR,
                                         handler: None,
@@ -325,9 +329,9 @@ impl SaveAsMode {
                     }
                 ],
                 vec![
-                    |_, app, _e| {
+                    |_, _, _e| {
                         // todo!();
-                        app.logs.push(Log {
+                        LOGS.push(Log {
                             message: "Double clicking when saving as is not implemented yet (todo)".to_string(),
                             color: C_LOG_TODO,
                             handler: None,
