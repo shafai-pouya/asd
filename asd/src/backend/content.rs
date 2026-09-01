@@ -1,6 +1,6 @@
 use crate::assets::constants::DURATION_SMALL_TIMER;
 use crate::backend::caret::{Carets, CursorEditor};
-use crate::backend::checkpoint::checkpoints::Checkpoints;
+use crate::backend::checkpoint::Checkpoints;
 use crate::backend::cursor::Cursor;
 use crate::backend::display_string::{DisplaySlice, DisplayString};
 use crate::backend::little_string::LittleString;

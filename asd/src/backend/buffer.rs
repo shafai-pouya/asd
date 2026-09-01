@@ -1,7 +1,7 @@
 use crate::assets::colors::colors::C_LOG_INFO;
 use crate::assets::constants::DURATION_BIG_TIMER;
 use crate::backend::caret::Carets;
-use crate::backend::checkpoint::checkpoints::Checkpoints;
+use crate::backend::checkpoint::Checkpoints;
 use crate::backend::content::Content;
 use crate::backend::encoding::Encoding;
 use crate::ui::custom_scrollbar::CustomScrollbar;
