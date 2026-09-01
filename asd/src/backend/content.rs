@@ -141,16 +141,13 @@ impl Content {
         caret_ptr.added_len +=
             new_text_lines_n.saturating_sub(1) + new_text.iter().map(|l| l.len()).sum::<usize>();
 
-        unsafe {
-            self.replace_text_without_checkpoints(carets, new_text);
-        } // Safety: I did operate checkpoints by myself
+        self.replace_text_without_checkpoints(carets, new_text);
 
         checkpoints.little_timer_deadline = Some(Instant::now() + DURATION_SMALL_TIMER);
     }
 
-    /// Safety: Make sure the encoding is correct, and make sure you don't want to apply it to the
-    /// checkpoints, and you have commited checkpoints before
-    pub(crate) unsafe fn replace_text_without_checkpoints(
+    /// Safety: Make sure the encoding is correct
+    fn replace_text_without_checkpoints(
         &mut self,
         carets: &mut CursorEditor,
         new_text: MostlyOneVec<LittleString>,

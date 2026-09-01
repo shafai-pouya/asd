@@ -76,6 +76,11 @@ impl Buffer {
         self.checkpoints.commit(&mut self.carets, &self.content);
     }
 
+    #[inline]
+    pub(crate) fn drop_commit(&mut self) {
+        self.checkpoints.drop_commit(&mut self.carets);
+    }
+
     pub(crate) fn buffer_modified(&mut self) {
         self.modified = true;
         if self.checkpoints.big_timer_deadline.is_none() {

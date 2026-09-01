@@ -34,10 +34,19 @@ pub(crate) struct Checkpoints {
 }
 
 impl Checkpoints {
+    pub fn drop_commit(&mut self, carets: &mut Carets) {
+        self.little_timer_deadline = None;
+        self.big_timer_deadline = None;
+        for caret in carets {
+            caret.added_len = 0;
+            caret.removed_text = movec!();
+            caret.started = false;
+        }
+    }
     pub(crate) fn commit(&mut self, carets: &mut Carets, content: &Content) {
         self.little_timer_deadline = None;
         self.big_timer_deadline = None;
-        if carets.carets.iter().any(|c| {
+        if carets.carets.iter().all(|c| {
             c.added_len == 0 && c.removed_text.get(0).map(|a| a.len() == 0).unwrap_or(true)
         }) {
             return;
@@ -120,6 +129,16 @@ impl Checkpoints {
 
 impl Checkpoints {
     pub(crate) fn new() -> Checkpoints {
+        Checkpoints {
+            cursor_lened: 0,
+            others: Vec::new(),
+            big_timer_deadline: None,
+            little_timer_deadline: None,
+        }
+    }
+
+    /// Ghost checkpoints used to do nothing
+    pub fn ghost() -> Self {
         Checkpoints {
             cursor_lened: 0,
             others: Vec::new(),

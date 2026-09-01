@@ -1,6 +1,7 @@
 use crate::assets::colors::colors::C_LOG_INFO;
 use crate::backend::buffer::Buffer;
 use crate::backend::caret::{Caret, CursorEditor, Position};
+use crate::backend::checkpoint::Checkpoints;
 use crate::backend::content::whitespaces_in_the_start_of_the_line;
 use crate::backend::cursor::Cursor;
 use crate::backend::display_char::DisplayChar;
@@ -286,6 +287,8 @@ impl EditController for Buffer {
         self.carets
             .carets
             .resize_with(checkpoint.inner.len(), || Caret::new());
+
+        let mut ghost_checkpoints = Checkpoints::ghost();
         for (idx, edit) in checkpoint.inner.iter().enumerate().rev() {
             unsafe {
                 self.carets.carets[idx].set_position_unchecked(Position::new(
@@ -314,11 +317,15 @@ impl EditController for Buffer {
                 cursors: &mut self.carets,
             };
             unsafe {
-                self.content
-                    .replace_text_without_checkpoints(&mut ce, edit.edit.removed_data.clone())
+                self.content.replace_text(
+                    &mut ghost_checkpoints,
+                    &mut ce,
+                    edit.edit.removed_data.clone(),
+                )
             } // Safety: It WAS a text with the valid encoding
         }
 
+        self.drop_commit();
         self.buffer_modified();
         self.carets.merge();
         self.carets
@@ -343,6 +350,8 @@ impl EditController for Buffer {
         self.carets
             .carets
             .resize_with(checkpoint.inner.len(), || Caret::new());
+
+        let mut ghost_checkpoints = Checkpoints::ghost();
         for (idx, edit) in checkpoint.inner.iter().enumerate().rev() {
             unsafe {
                 self.carets.carets[idx].set_position_unchecked(Position::new(
@@ -371,10 +380,14 @@ impl EditController for Buffer {
                 cursors: &mut self.carets,
             };
             unsafe {
-                self.content
-                    .replace_text_without_checkpoints(&mut ce, edit.edit.added_data.clone())
+                self.content.replace_text(
+                    &mut ghost_checkpoints,
+                    &mut ce,
+                    edit.edit.added_data.clone(),
+                )
             } // Safety: It WAS a text with the valid encoding
         }
+        self.drop_commit();
 
         self.buffer_modified();
         self.carets.merge();
