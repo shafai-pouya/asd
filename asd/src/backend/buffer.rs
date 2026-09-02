@@ -37,7 +37,7 @@ impl Buffer {
         let (encoding, content) = Encoding::from_file(&path);
         Self::new(path, showing_filename, content, encoding)
     }
-    pub(crate) fn new_custom(path: PathBuf, showing_filename: String, content: &str) -> Self {
+    pub(crate) fn new_utf8(path: PathBuf, showing_filename: String, content: &str) -> Self {
         let (encoding, content) = Encoding::from_str_utf8(content);
         Self::new(path, showing_filename, content, encoding)
     }

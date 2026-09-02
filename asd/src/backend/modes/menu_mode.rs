@@ -1,6 +1,6 @@
 use crate::App;
 use crate::assets::colors::{C_MENU_BG, C_MENU_FG};
-use crate::backend::buffers::Buffers;
+use crate::backend::buffers::BuffersLock;
 use crate::backend::event_handler::EventHandler;
 use crate::backend::modes::Mode;
 use crate::backend::modes::editor_mode::EditorMode;
@@ -141,29 +141,23 @@ impl MenuMode {
             MenuCommand::new(
                 "Quit this buffer".into(),
                 "q".into(),
-                Some((
-                    KeyCode::Char('q'),
-                    KeyModifiers::NONE,
-                    Buffers::quit_current_evt,
-                )),
+                Some((KeyCode::Char('q'), KeyModifiers::NONE, |_, _| {
+                    BuffersLock.quit_current()
+                })),
             ),
             MenuCommand::new(
                 "Force quit this buffer".into(),
                 "q".into(),
-                Some((
-                    KeyCode::Char('Q'),
-                    KeyModifiers::SHIFT,
-                    Buffers::force_quit_current_evt,
-                )),
+                Some((KeyCode::Char('Q'), KeyModifiers::SHIFT, |_, _| {
+                    BuffersLock.force_quit_current()
+                })),
             ),
             MenuCommand::new(
                 "Open help".into(),
                 "h".into(),
-                Some((
-                    KeyCode::Char('h'),
-                    KeyModifiers::NONE,
-                    Buffers::open_help_evt,
-                )),
+                Some((KeyCode::Char('h'), KeyModifiers::NONE, |_, _| {
+                    BuffersLock.get_file_change_guard().open_help()
+                })),
             ),
         ];
         // commands.push(MenuCommand::new("Open file".into(), "h".into(),

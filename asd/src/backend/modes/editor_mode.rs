@@ -1,5 +1,5 @@
 use crate::App;
-use crate::backend::buffers::BUFFERS;
+use crate::backend::buffers::BuffersLock;
 use crate::backend::event_handler::EventHandler;
 use crate::backend::modes::Mode;
 use crate::backend::modes::menu_mode::MenuMode;
@@ -35,17 +35,17 @@ impl EditorMode {
                     |_, app, e| {
                         if (e.modifiers & (!KeyModifiers::SHIFT)) == KeyModifiers::empty() &&
                             let KeyCode::Char(ch) = e.code {
-                            BUFFERS.get_change_guard().inner_mut().active_mut().place_char(ch, app.last_content_rect);
+                            BuffersLock.get_change_guard().inner_mut().active_mut().place_char(ch, app.last_content_rect);
                             return false;
                         }
                         if e.modifiers == KeyModifiers::empty() &&
                             KeyCode::Enter == e.code {
-                            BUFFERS.get_change_guard().inner_mut().active_mut().place_new_line(app.last_content_rect);
+                            BuffersLock.get_change_guard().inner_mut().active_mut().place_new_line(app.last_content_rect);
                             return false;
                         }
                         if e.modifiers == KeyModifiers::empty() &&
                             KeyCode::Tab == e.code {
-                            BUFFERS.get_change_guard().inner_mut().active_mut().operate_tab(app.last_content_rect);
+                            BuffersLock.get_change_guard().inner_mut().active_mut().operate_tab(app.last_content_rect);
                             return false;
                         }
                         true
@@ -61,7 +61,7 @@ impl EditorMode {
                         }
                         if e.modifiers == (KeyModifiers::CONTROL | KeyModifiers::SHIFT) &&
                             e.code == KeyCode::Char('z') {
-                            BUFFERS.get_change_guard().inner_mut().active_mut().operate_redo(app.last_content_rect);
+                            BuffersLock.get_change_guard().inner_mut().active_mut().operate_redo(app.last_content_rect);
                             return false;
                         }
                         if e.modifiers == (KeyModifiers::CONTROL | KeyModifiers::ALT) &&
@@ -88,27 +88,27 @@ impl EditorMode {
                                 app.operate_quit(); false
                             }
                             KeyCode::Char('f') => {
-                                let mut buffers = BUFFERS.get_change_guard();
+                                let mut buffers = BuffersLock.get_change_guard();
                                 let active_buffer = buffers.inner_mut().active_mut();
                                 active_buffer.scrollbar.freeze = !active_buffer.scrollbar.freeze; false
                             }
                             KeyCode::Char('s') => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_save(); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_save(); false
                             }
                             KeyCode::Char('c') => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_copy(app.last_content_rect, &mut app.internal_clipboard); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_copy(app.last_content_rect, &mut app.internal_clipboard); false
                             }
                             KeyCode::Char('v') => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_paste(app.last_content_rect, &mut app.internal_clipboard); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_paste(app.last_content_rect, &mut app.internal_clipboard); false
                             }
                             KeyCode::Char('x') => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_cut(app.last_content_rect, &mut app.internal_clipboard); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_cut(app.last_content_rect, &mut app.internal_clipboard); false
                             }
                             KeyCode::Char('z') => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_undo(app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_undo(app.last_content_rect); false
                             }
                             // KeyCode::Char('n') => {
-                            //     let b = app.buffers.active_mut();
+                            //     let b = app.BuffersLock.active_mut();
                             //     unsafe {
                             //         b.content.replace_text(&mut b.checkpoints,
                             //                                &mut CursorEditor { cursors: &mut b.carets, cursor: 0 },
@@ -137,7 +137,7 @@ impl EditorMode {
                             _ => return true,
                         };
 
-                        let mut buffers = BUFFERS.get_change_guard();
+                        let mut buffers = BuffersLock.get_change_guard();
                         let active_buffer = buffers.inner_mut().active_mut();
 
                         if e.modifiers == KeyModifiers::ALT {
@@ -163,32 +163,27 @@ impl EditorMode {
 
                         active_buffer.operate_arrow_begin();
                         for caret in active_buffer.carets.carets.iter_mut() {
-                            let mut pos = *caret.get_position();
-
                             if (e.modifiers & KeyModifiers::SHIFT) != KeyModifiers::empty() {
-                                if pos.is_selection_none() {
-                                    pos.set_selection_to_cursor();
-                                }
+                                caret.select()
                             } else {
-                                pos.set_selection_none();
+                                caret.unselect();
                             }
 
                             match ((e.modifiers & KeyModifiers::CONTROL) == KeyModifiers::CONTROL, arrow) {
-                                (false, Arrow::L) => pos.cursor_prev(&active_buffer.content),
-                                (false, Arrow::R) => pos.cursor_next(&active_buffer.content),
-                                (_, Arrow::U) => pos.cursor_up(1, &active_buffer.content),
-                                (_, Arrow::D) => pos.cursor_down(1, &active_buffer.content),
-                                (false, Arrow::End) => pos.cursor_end(&active_buffer.content),
-                                (false, Arrow::Home) => pos.cursor_home(),
-                                (_, Arrow::PU) => pos.cursor_up(app.last_content_rect.height as usize, &active_buffer.content),
-                                (_, Arrow::PD) => pos.cursor_down(app.last_content_rect.height as usize, &active_buffer.content),
-                                (true, Arrow::L) => { pos.cursor_prev_word(&active_buffer.content) },
-                                (true, Arrow::R) => { pos.cursor_next_word(&active_buffer.content) },
-                                (true, Arrow::End) => pos.cursor_ctrl_end(&active_buffer.content),
-                                (true, Arrow::Home) => pos.cursor_ctrl_home(),
+                                (false, Arrow::L) => caret.cursor_prev(&active_buffer.content),
+                                (false, Arrow::R) => caret.cursor_next(&active_buffer.content),
+                                (_, Arrow::U) => caret.cursor_up(1, &active_buffer.content),
+                                (_, Arrow::D) => caret.cursor_down(1, &active_buffer.content),
+                                (false, Arrow::End) => caret.cursor_end(&active_buffer.content),
+                                (false, Arrow::Home) => caret.cursor_home(),
+                                (_, Arrow::PU) => caret.cursor_up(app.last_content_rect.height as usize, &active_buffer.content),
+                                (_, Arrow::PD) => caret.cursor_down(app.last_content_rect.height as usize, &active_buffer.content),
+                                (true, Arrow::L) => { caret.cursor_prev_word(&active_buffer.content) },
+                                (true, Arrow::R) => { caret.cursor_next_word(&active_buffer.content) },
+                                (true, Arrow::End) => caret.cursor_ctrl_end(&active_buffer.content),
+                                (true, Arrow::Home) => caret.cursor_ctrl_home(),
                             }
-
-                            unsafe { caret.set_position_unchecked(pos); }
+                            
                             caret.merge_sel_pos();
                         }
                         active_buffer.operate_arrow_end(app.last_content_rect);
@@ -200,10 +195,10 @@ impl EditorMode {
                     |_, app, e| {
                         match (e.code, e.modifiers) {
                             (KeyCode::Backspace, KeyModifiers::NONE) => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_backspace(app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_backspace(app.last_content_rect); false
                             }
                             (KeyCode::Delete, KeyModifiers::NONE) => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_delete(app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_delete(app.last_content_rect); false
                             }
                             _ => true,
                         }
@@ -219,23 +214,23 @@ impl EditorMode {
                         match e.kind {
                             MouseEventKind::ScrollDown => {
                                 if (e.modifiers & KeyModifiers::SHIFT) == KeyModifiers::SHIFT {
-                                    BUFFERS.get_change_guard().inner_mut().active_mut().scrollbar.next(10);
+                                    BuffersLock.get_change_guard().inner_mut().active_mut().scrollbar.next(10);
                                 } else {
-                                    BUFFERS.get_change_guard().inner_mut().active_mut().scrollbar.next_line(5);
+                                    BuffersLock.get_change_guard().inner_mut().active_mut().scrollbar.next_line(5);
                                 } false
                             }
                             MouseEventKind::ScrollUp => {
                                 if (e.modifiers & KeyModifiers::SHIFT) == KeyModifiers::SHIFT {
-                                    BUFFERS.get_change_guard().inner_mut().active_mut().scrollbar.prev(10);
+                                    BuffersLock.get_change_guard().inner_mut().active_mut().scrollbar.prev(10);
                                 } else {
-                                    BUFFERS.get_change_guard().inner_mut().active_mut().scrollbar.prev_line(5);
+                                    BuffersLock.get_change_guard().inner_mut().active_mut().scrollbar.prev_line(5);
                                 } false
                             }
                             MouseEventKind::ScrollLeft => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().scrollbar.prev(10); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().scrollbar.prev(10); false
                             }
                             MouseEventKind::ScrollRight => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().scrollbar.next(10); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().scrollbar.next(10); false
                             }
                             _ => true,
                         }
@@ -247,23 +242,23 @@ impl EditorMode {
                         match (e.kind, e.modifiers) {
                             (MouseEventKind::Down(MouseButton::Left), KeyModifiers::NONE) |
                             (MouseEventKind::Down(MouseButton::Left), SHIFT_ALT) => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_single_click(e.column, e.row, app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_single_click(e.column, e.row, app.last_content_rect); false
                             }
                             (MouseEventKind::Down(MouseButton::Left), KeyModifiers::CONTROL) => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_add_cursor(e.column, e.row, app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_add_cursor(e.column, e.row, app.last_content_rect); false
                             }
                             (MouseEventKind::Drag(MouseButton::Left), KeyModifiers::NONE) => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_mouse_select(e.column, e.row, app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_mouse_select(e.column, e.row, app.last_content_rect); false
                             }
                             (MouseEventKind::Drag(MouseButton::Left), SHIFT_ALT) => {
-                                BUFFERS.get_change_guard().inner_mut().active_mut().operate_multicursor_select(e.column, e.row, app.last_content_rect); false
+                                BuffersLock.get_change_guard().inner_mut().active_mut().operate_multicursor_select(e.column, e.row, app.last_content_rect); false
                             }
                             _ => true,
                         }
                     }
                 ],
                 vec![|_, app, e| {
-                    BUFFERS
+                    BuffersLock
                         .get_change_guard()
                         .inner_mut()
                         .active_mut()

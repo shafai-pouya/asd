@@ -63,17 +63,17 @@ impl EditOperators for Buffer {
     fn op_no_virtual_spaces(&mut self) {
         for i in 0..self.carets.carets.len() {
             let mut pos = *self.carets.carets[i].get_position();
-            if !pos.selection().is_none() {
-                let line = pos.selection().get_line();
-                let current_col = pos.selection().get_col();
+            if !pos.selection.is_none() {
+                let line = pos.selection.get_line();
+                let current_col = pos.selection.get_col();
                 if self.content[line].len() < current_col {
                     unsafe {
                         pos.selection_mut().set_col(self.content[line].len());
                     }
                 }
             }
-            let line = pos.cursor().get_line();
-            let current_col = pos.cursor().get_col();
+            let line = pos.cursor.get_line();
+            let current_col = pos.cursor.get_col();
             if self.content[line].len() < current_col {
                 unsafe {
                     pos.cursor_mut().set_col(self.content[line].len());
@@ -88,7 +88,7 @@ impl EditOperators for Buffer {
 
     fn op_get_tab_little_string(ce: &CursorEditor, tab_size: usize) -> LittleString {
         let tab_len =
-            tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor().col % tab_size);
+            tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor.col % tab_size);
         LittleString::from_spaces_repeated(tab_len)
     }
 

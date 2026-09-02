@@ -40,7 +40,6 @@ impl Checkpoints {
         for caret in carets {
             caret.added_len = 0;
             caret.removed_text = movec!();
-            caret.started = false;
         }
     }
     pub(crate) fn commit(&mut self, carets: &mut Carets, content: &Content) {
@@ -56,8 +55,8 @@ impl Checkpoints {
                 .carets
                 .iter_mut()
                 .map(|caret| {
-                    let mut line = caret.get_position().cursor().get_line();
-                    let mut col = caret.get_position().cursor().get_col();
+                    let mut line = caret.get_position().cursor.get_line();
+                    let mut col = caret.get_position().cursor.get_col();
                     let mut result = movec!();
 
                     loop {
@@ -107,10 +106,7 @@ impl Checkpoints {
                 .collect(),
         })
     }
-}
-
-impl Checkpoints {
-    pub(crate) fn push(&mut self, checkpoint: Checkpoint) {
+    fn push(&mut self, checkpoint: Checkpoint) {
         self.others.truncate(self.cursor_lened);
         self.others.push(checkpoint);
         self.cursor_lened += 1;
@@ -124,9 +120,6 @@ impl Checkpoints {
             });
         }
     }
-}
-
-impl Checkpoints {
     pub(crate) fn new() -> Checkpoints {
         Checkpoints {
             cursor_lened: 0,

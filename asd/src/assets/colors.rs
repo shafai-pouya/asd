@@ -1,4 +1,3 @@
-
 use ratatui::style::Color;
 
 // pub static C_BG_DIALOG_PRIMARY: Color = Color::Rgb(121, 88, 220);

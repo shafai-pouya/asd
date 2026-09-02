@@ -6,7 +6,7 @@ mod ui;
 
 use crate::assets::colors::{C_LOG_ERROR, C_LOG_HINT};
 use crate::assets::constants::POLL_DURATION;
-use crate::backend::buffers::BUFFERS;
+use crate::backend::buffers::BuffersLock;
 use crate::backend::encoding::Encoding;
 use crate::backend::file_tree::FileTree;
 use crate::backend::little_string::LittleString;
@@ -88,11 +88,11 @@ impl App {
             color: C_LOG_HINT,
             handler: Some(|me, _| {
                 if let MouseEventKind::Down(MouseButton::Left) = me.kind {
-                    BUFFERS.get_file_change_guard().open_help();
+                    BuffersLock.get_file_change_guard().open_help();
                 };
             }),
         });
-        BUFFERS
+        BuffersLock
             .get_file_change_guard()
             .open_file_or_focus(path.to_path_buf());
         let is_dir = match path.metadata() {
@@ -118,7 +118,7 @@ impl App {
         }
     }
     fn help() -> Self {
-        BUFFERS.get_file_change_guard().open_help();
+        BuffersLock.get_file_change_guard().open_help();
         Self {
             exit: false,
             next_is_separator_event: false,
@@ -140,7 +140,7 @@ impl App {
         while !self.exit {
             self.draw(terminal, mode);
             self.handle_events(mode);
-            BUFFERS.handle_checkpoint_timers();
+            BuffersLock.handle_checkpoint_timers();
         }
     }
 
@@ -205,14 +205,14 @@ impl App {
 
     #[inline]
     fn render(&mut self, frame: &mut Frame, mode: &mut Box<dyn Mode>) -> Vec<(u16, u16, u32)> {
-        let mut buffers = BUFFERS.get_render_guard();
+        let mut buffers = BuffersLock.get_render_guard();
         let emoji_queue = render_base(self, frame, !mode.needs_terminal_cursor(), &mut buffers);
         mode.render_function(frame);
         emoji_queue
     }
 
     fn operate_quit(&mut self) {
-        let mut buffers = BUFFERS.get_check_guard();
+        let mut buffers = BuffersLock.get_check_guard();
         buffers.commit_all();
         if !buffers.any_modified() {
             self.exit = true;

@@ -158,7 +158,7 @@ impl EditController for Buffer {
                 .carets
                 .carets
                 .iter()
-                .any(|c| c.get_position().cursor().col == 0);
+                .any(|c| c.get_position().cursor.col == 0);
             for caret_idx in 0..self.carets.carets.len() {
                 self.carets.carets[caret_idx].selection_make_backwards(&self.content);
                 let mut ce = CursorEditor {
@@ -197,7 +197,7 @@ impl EditController for Buffer {
             self.commit();
         } else {
             let commit = self.carets.carets.iter().any(|c| {
-                c.get_position().cursor().col == self.content[c.get_position().cursor().line].len()
+                c.get_position().cursor.col == self.content[c.get_position().cursor.line].len()
             });
             for caret_idx in 0..self.carets.carets.len() {
                 self.carets.carets[caret_idx].selection_make_forwards(&self.content);
@@ -492,11 +492,9 @@ impl EditController for Buffer {
         LOGS.clear();
         self.commit();
 
-        let cert_ptr = &mut self.carets.carets[0];
-        if cert_ptr.is_selection_none() {
-            cert_ptr.set_selection_to_cursor();
-        }
-        cert_ptr.set_just_cursor_mouse(
+        let caret_ptr = &mut self.carets.carets[0];
+        caret_ptr.select();
+        caret_ptr.set_just_cursor_mouse(
             (col.wrapping_sub(last_content_rect.x) + self.scrollbar.position) as usize,
             row.wrapping_sub(last_content_rect.y) as usize + self.scrollbar.top_position,
             &self.content,

@@ -2,7 +2,7 @@ use crate::assets::colors::{
     C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR,
     C_LOG_INFO, C_LOG_TODO,
 };
-use crate::backend::buffers::BUFFERS;
+use crate::backend::buffers::BuffersLock;
 use crate::backend::display_string::DisplayString;
 use crate::backend::encoding::{Encoding, LineEnding};
 use crate::backend::event_handler::EventHandler;
@@ -138,7 +138,7 @@ impl SaveAsMode {
                              KeyCode::Enter == e.code {
                              app.change_mode = Some(Box::new(EditorMode::new()));
                              LOGS.clear();
-                             let mut buffers = BUFFERS.get_change_guard();
+                             let mut buffers = BuffersLock.get_change_guard();
                              let active_buffer = buffers.inner_mut().active_mut();
                              active_buffer.save(Some(Path::new(&data.filepath)));
                              active_buffer.modified = true;

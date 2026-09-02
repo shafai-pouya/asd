@@ -1,6 +1,6 @@
 use crate::assets::colors::{C_TREE_FG_DIR, C_TREE_FG_FILE};
 use crate::assets::constants::{TREE_FILE_LOADED_SYMBOL, TREE_FILE_MODIFIED_SYMBOL};
-use crate::backend::buffers::{BUFFERS, Buffers, Inode};
+use crate::backend::buffers::{Buffers, BuffersLock, Inode};
 use crate::backend::file_tree::NodePointer;
 use ratatui::layout::Rect;
 use ratatui::style::Stylize;
@@ -118,7 +118,7 @@ impl FileTreeNode {
                 self.expand();
             }
         } else {
-            BUFFERS
+            BuffersLock
                 .get_file_change_guard()
                 .open_file_or_focus(self.path.clone());
         }
@@ -147,7 +147,7 @@ impl FileTreeNode {
         str.push(' ');
         coloring_start_x += 1;
         str.push(
-            match BUFFERS
+            match BuffersLock
                 .get_check_guard()
                 .get_online_state(self.get_mut(ptr).unwrap().get_inode())
             {

@@ -114,8 +114,8 @@ pub(crate) fn render_cursor(
     let len = cursors.carets.len();
     if can_use_cursor && len == 1 && cursors.carets[0].get_position().is_selection_none() {
         if let Ok((x, y)) = find_in_viewport_position(
-            cursors.carets[0].get_position().cursor().line,
-            cursors.carets[0].get_position().cursor().col,
+            cursors.carets[0].get_position().cursor.line,
+            cursors.carets[0].get_position().cursor.col,
             content_area,
             scrollbar,
         ) {
@@ -129,10 +129,10 @@ pub(crate) fn render_cursor(
         }
         for cert in &cursors.carets {
             let pos = cert.get_position();
-            if pos.selection().is_none() {
+            if pos.selection.is_none() {
                 if let Ok((x, y)) = find_in_viewport_position(
-                    pos.cursor().line,
-                    pos.cursor().col,
+                    pos.cursor.line,
+                    pos.cursor.col,
                     content_area,
                     scrollbar,
                 ) {
@@ -155,12 +155,12 @@ pub(crate) fn render_cursor(
                 let mut start;
                 let mut end;
                 let cursor = LC {
-                    line: pos.cursor().line,
-                    col: pos.cursor().col,
+                    line: pos.cursor.line,
+                    col: pos.cursor.col,
                 };
                 let selection = LC {
-                    line: pos.selection().line,
-                    col: pos.selection().col,
+                    line: pos.selection.line,
+                    col: pos.selection.col,
                 };
                 if cursor >= selection {
                     start = selection;

@@ -1,10 +1,8 @@
-use crate::App;
 use crate::assets::colors::C_LOG_TODO;
 use crate::assets::constants::READ_ONLY_PATH;
 use crate::backend::buffer::Buffer;
 use crate::backend::file_tree_node::OnlineState;
 use crate::ui::log::{LOGS, Log};
-use crossterm::event::KeyEvent;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
@@ -17,11 +15,10 @@ use std::time::Instant;
 pub static BUFFERS_LOCK: Lazy<Mutex<Buffers>> =
     Lazy::new(|| Mutex::new(unsafe { Buffers::empty() }));
 
-pub struct BuffersType;
-pub static BUFFERS: BuffersType = BuffersType;
+pub struct BuffersLock;
 pub static BUFFERS_DEADLOCK_PROTECTOR: AtomicBool = AtomicBool::new(false);
 
-impl BuffersType {
+impl BuffersLock {
     fn get_guard(&self) -> BuffersGuard<'_> {
         if BUFFERS_DEADLOCK_PROTECTOR.swap(true, Ordering::Acquire) {
             panic!("attempted to recursively lock a Mutex");
@@ -60,7 +57,7 @@ impl BuffersType {
 
         let mut buffers = self.get_guard();
 
-        for buffer in unsafe { buffers.buffers.inner_mut().values_mut() } {
+        for buffer in buffers.buffers.inner.values_mut() {
             if let Some(t) = buffer.checkpoints.little_timer_deadline
                 && now >= t
             {
@@ -75,6 +72,34 @@ impl BuffersType {
                 buffer.commit();
             }
         }
+    }
+
+    pub(crate) fn quit_current(&self) {
+        let mut buffers = BuffersLock.get_file_change_guard();
+        if buffers.buffers.buffers.inner.len() == 1 {
+            // todo!()
+            LOGS.push(Log {
+                message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
+                color: C_LOG_TODO,
+                handler: None,
+            });
+            return;
+        }
+        buffers.remove_self();
+    }
+
+    pub(crate) fn force_quit_current(&self) {
+        let mut buffers = BuffersLock.get_file_change_guard();
+        if buffers.buffers.buffers.inner.len() == 1 {
+            // todo!()
+            LOGS.push(Log {
+                message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
+                color: C_LOG_TODO,
+                handler: None,
+            });
+            return;
+        }
+        buffers.force_remove_self();
     }
 }
 
@@ -150,7 +175,7 @@ impl BuffersFileChangeGuard<'_> {
         let inode = Inode::new_virtual();
         self.buffers.buffers.inner.insert(
             inode,
-            Buffer::new_custom(
+            Buffer::new_utf8(
                 PathBuf::from(READ_ONLY_PATH),
                 "help.txt (READONLY)".to_string(),
                 include_str!("../assets/help.txt"),
@@ -170,6 +195,19 @@ impl BuffersFileChangeGuard<'_> {
             self.insert(inode, Buffer::new_from_file(path));
         }
     }
+    pub(crate) fn remove_self(&mut self) {
+        let buffers: &mut Buffers = &mut self.buffers.buffers;
+        let buffer = buffers.active_mut();
+        if buffer.try_quit().is_ok() {
+            buffers.inner.remove(&buffers.active_inode);
+            buffers.active_inode = *buffers.inner.iter().next().unwrap().0; // todo: remove unwrap
+        }
+    }
+    pub(crate) fn force_remove_self(&mut self) {
+        let buffers: &mut Buffers = &mut self.buffers.buffers;
+        buffers.inner.remove(&buffers.active_inode);
+        buffers.active_inode = *buffers.inner.iter().next().unwrap().0; // todo: remove unwrap
+    }
 }
 
 static VIRTUAL_INODE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -188,7 +226,7 @@ impl Inode {
 
 pub(crate) struct Buffers {
     inner: HashMap<Inode, Buffer>,
-    pub active_inode: Inode,
+    active_inode: Inode,
 }
 
 impl Buffers {
@@ -208,57 +246,5 @@ impl Buffers {
 
     pub(crate) fn get_inode(path: &Path) -> Result<Inode, std::io::Error> {
         Ok(Inode::Real(path.metadata()?.ino()))
-    }
-
-    #[inline]
-    pub(crate) unsafe fn inner_mut(&mut self) -> &mut HashMap<Inode, Buffer> {
-        &mut self.inner
-    }
-
-    pub(crate) fn quit_current_evt(_: &mut App, _: &KeyEvent) {
-        let mut buffers = BUFFERS_LOCK.lock().unwrap();
-        if buffers.inner.len() == 1 {
-            // todo!()
-            LOGS.push(Log {
-                message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
-                color: C_LOG_TODO,
-                handler: None,
-            });
-            return;
-        }
-        buffers.remove_self();
-    }
-
-    pub(crate) fn force_quit_current_evt(_: &mut App, _: &KeyEvent) {
-        let mut buffers = BUFFERS_LOCK.lock().unwrap();
-        if buffers.inner.len() == 1 {
-            // todo!()
-            LOGS.push(Log {
-                message: "This buffer is the only opened buffer. try opening another one and close this one (todo)".to_string(),
-                color: C_LOG_TODO,
-                handler: None,
-            });
-            return;
-        }
-        buffers.force_remove_self();
-    }
-
-    pub(crate) fn open_help_evt(_: &mut App, _: &KeyEvent) {
-        let mut buffers = BUFFERS.get_file_change_guard();
-        buffers.open_help()
-    }
-}
-
-impl Buffers {
-    pub(crate) fn remove_self(&mut self) {
-        let buffer = self.active_mut();
-        if buffer.try_quit().is_ok() {
-            self.inner.remove(&self.active_inode);
-            self.active_inode = *self.inner.iter().next().unwrap().0; // todo: remove unwrap
-        }
-    }
-    pub(crate) fn force_remove_self(&mut self) {
-        self.inner.remove(&self.active_inode);
-        self.active_inode = *self.inner.iter().next().unwrap().0; // todo: remove unwrap
     }
 }
