@@ -8,82 +8,107 @@ use std::sync::Mutex;
 pub static NORMAL_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
 pub static EMOJI_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
-macro_rules! my_helper {
-    ([$($e:expr),* $(,)?]) => {
+const fn pad4(s: &str) -> [u8; 4] {
+    let bytes = s.as_bytes();
+    let mut out = [0; 4];
+
+    let mut i = 0;
+    while i < bytes.len() {
+        assert!(i < 4);
+        out[i] = bytes[i];
+        i += 1;
+    }
+
+    out
+}
+
+macro_rules! strings_to_bytes {
+    ($($s:literal),* $(,)?) => {
         [
-            $($e as u8),*
+            $(
+                {
+                    const {
+                        assert!($s.len() <= 4);
+                    };
+                    pad4($s)[0]
+                },
+                pad4($s)[1],
+                pad4($s)[2],
+                pad4($s)[3],
+            )*
         ]
     };
 }
-pub const LOOKUP_SPECIAL: [u8; 260] = my_helper!([
-    'N', 'U', 'L', 0, // 0x00 - NUL - 00000000
-    'S', 'O', 'H', 0, // 0x01 - SOH - 00000001
-    'S', 'T', 'X', 0, // 0x02 - STX - 00000010
-    'E', 'T', 'X', 0, // 0x03 - ETX - 00000011
-    'E', 'O', 'T', 0, // 0x04 - EOT - 00000100
-    'E', 'N', 'Q', 0, // 0x05 - ENQ - 00000101
-    'A', 'C', 'K', 0, // 0x06 - ACK - 00000110
-    'B', 'E', 'L', 0, // 0x07 - BEL - 00000111
-    'B', 'S', 0, 0, // 0x08 - BS - 00001000
-    'H', 'T', 0, 0, // 0x09 - HT - 00001001
-    'L', 'F', 0, 0, // 0x0A - LF - 00001010
-    'V', 'T', 0, 0, // 0x0B - VT - 00001011
-    'F', 'F', 0, 0, // 0x0C - FF - 00001100
-    'C', 'R', 0, 0, // 0x0D - CR - 00001101
-    'S', 'O', 0, 0, // 0x0E - SO - 00001110
-    'S', 'I', 0, 0, // 0x0F - SI - 00001111
-    'D', 'L', 'E', 0, // 0x10 - DLE - 00010000
-    'D', 'C', '1', 0, // 0x11 - DC1 - 00010001
-    'D', 'C', '2', 0, // 0x12 - DC2 - 00010010
-    'D', 'C', '3', 0, // 0x13 - DC3 - 00010011
-    'D', 'C', '4', 0, // 0x14 - DC4 - 00010100
-    'N', 'A', 'K', 0, // 0x15 - NAK - 00010101
-    'S', 'Y', 'N', 0, // 0x16 - SYN - 00010110
-    'E', 'T', 'B', 0, // 0x17 - ETB - 00010111
-    'C', 'A', 'N', 0, // 0x18 - CAN - 00011000
-    'E', 'M', 0, 0, // 0x19 - EM - 00011001
-    'S', 'U', 'B', 0, // 0x1A - SUB - 00011010
-    'E', 'S', 'C', 0, // 0x1B - ESC - 00011011
-    'F', 'S', 0, 0, // 0x1C - FS - 00011100
-    'G', 'S', 0, 0, // 0x1D - GS - 00011101
-    'R', 'S', 0, 0, // 0x1E - RS - 00011110
-    'U', 'S', 0, 0, // 0x1F - US - 00011111
-    'D', 'E', 'L', 0, // 0x7F - DEL - 00100000
-    'P', 'A', 'D', 0, // 0x80 - PAD - 00100001
-    'H', 'O', 'P', 0, // 0x81 - HOP - 00100010
-    'B', 'P', 'H', 0, // 0x82 - BPH - 00100011
-    'N', 'B', 'H', 0, // 0x83 - NBH - 00100100
-    'I', 'N', 'D', 0, // 0x84 - IND - 00100101
-    'N', 'E', 'L', 0, // 0x85 - NEL - 00100110
-    'S', 'S', 'A', 0, // 0x86 - SSA - 00100111
-    'E', 'S', 'A', 0, // 0x87 - ESA - 00101000
-    'H', 'T', 'S', 0, // 0x88 - HTS - 00101001
-    'H', 'T', 'J', 0, // 0x89 - HTJ - 00101010
-    'V', 'T', 'S', 0, // 0x8A - VTS - 00101011
-    'P', 'L', 'D', 0, // 0x8B - PLD - 00101100
-    'P', 'L', 'U', 0, // 0x8C - PLU - 00101101
-    'R', 'I', 0, 0, // 0x8D - RI - 00101110
-    'S', 'S', '2', 0, // 0x8E - SS2 - 00101111
-    'S', 'S', '3', 0, // 0x8F - SS3 - 00110000
-    'D', 'C', 'S', 0, // 0x90 - DCS - 00110001
-    'P', 'U', '1', 0, // 0x91 - PU1 - 00110010
-    'P', 'U', '2', 0, // 0x92 - PU2 - 00110011
-    'S', 'T', 'S', 0, // 0x93 - STS - 00110100
-    'C', 'C', 'H', 0, // 0x94 - CCH - 00110101
-    'M', 'W', 0, 0, // 0x95 - MW - 00110110
-    'S', 'P', 'A', 0, // 0x96 - SPA - 00110111
-    'E', 'P', 'A', 0, // 0x97 - EPA - 00111000
-    'S', 'O', 'S', 0, // 0x98 - SOS - 00111001
-    'S', 'G', 'C', 'I', // 0x99 - SGCI - 00111010
-    'S', 'C', 'I', 0, // 0x9A - SCI - 00111011
-    'C', 'S', 'I', 0, // 0x9B - CSI - 00111100
-    'S', 'T', 0, 0, // 0x9C - ST - 00111101
-    'O', 'S', 'C', 0, // 0x9D - OSC - 00111110
-    'P', 'M', 0, 0, // 0x9E - PM - 00111111
-    'A', 'P', 'C', 0, // 0x9F - APC - 01000000
-]);
+pub const LOOKUP_SPECIAL: [u8; 260] = strings_to_bytes!(
+    "NUL",  // 0x00 - NUL - 00000000
+    "SOH",  // 0x01 - SOH - 00000001
+    "STX",  // 0x02 - STX - 00000010
+    "ETX",  // 0x03 - ETX - 00000011
+    "EOT",  // 0x04 - EOT - 00000100
+    "ENQ",  // 0x05 - ENQ - 00000101
+    "ACK",  // 0x06 - ACK - 00000110
+    "BEL",  // 0x07 - BEL - 00000111
+    "BS",   // 0x08 - BS - 00001000
+    "HT",   // 0x09 - HT - 00001001
+    "LF",   // 0x0A - LF - 00001010
+    "VT",   // 0x0B - VT - 00001011
+    "FF",   // 0x0C - FF - 00001100
+    "CR",   // 0x0D - CR - 00001101
+    "SO",   // 0x0E - SO - 00001110
+    "SI",   // 0x0F - SI - 00001111
+    "DLE",  // 0x10 - DLE - 00010000
+    "DC1",  // 0x11 - DC1 - 00010001
+    "DC2",  // 0x12 - DC2 - 00010010
+    "DC3",  // 0x13 - DC3 - 00010011
+    "DC4",  // 0x14 - DC4 - 00010100
+    "NAK",  // 0x15 - NAK - 00010101
+    "SYN",  // 0x16 - SYN - 00010110
+    "ETB",  // 0x17 - ETB - 00010111
+    "CAN",  // 0x18 - CAN - 00011000
+    "EM",   // 0x19 - EM - 00011001
+    "SUB",  // 0x1A - SUB - 00011010
+    "ESC",  // 0x1B - ESC - 00011011
+    "FS",   // 0x1C - FS - 00011100
+    "GS",   // 0x1D - GS - 00011101
+    "RS",   // 0x1E - RS - 00011110
+    "US",   // 0x1F - US - 00011111
+    "DEL",  // 0x7F - DEL - 00100000
+    "PAD",  // 0x80 - PAD - 00100001
+    "HOP",  // 0x81 - HOP - 00100010
+    "BPH",  // 0x82 - BPH - 00100011
+    "NBH",  // 0x83 - NBH - 00100100
+    "IND",  // 0x84 - IND - 00100101
+    "NEL",  // 0x85 - NEL - 00100110
+    "SSA",  // 0x86 - SSA - 00100111
+    "ESA",  // 0x87 - ESA - 00101000
+    "HTS",  // 0x88 - HTS - 00101001
+    "HTJ",  // 0x89 - HTJ - 00101010
+    "VTS",  // 0x8A - VTS - 00101011
+    "PLD",  // 0x8B - PLD - 00101100
+    "PLU",  // 0x8C - PLU - 00101101
+    "RI",   // 0x8D - RI - 00101110
+    "SS2",  // 0x8E - SS2 - 00101111
+    "SS3",  // 0x8F - SS3 - 00110000
+    "DCS",  // 0x90 - DCS - 00110001
+    "PU1",  // 0x91 - PU1 - 00110010
+    "PU2",  // 0x92 - PU2 - 00110011
+    "STS",  // 0x93 - STS - 00110100
+    "CCH",  // 0x94 - CCH - 00110101
+    "MW",   // 0x95 - MW - 00110110
+    "SPA",  // 0x96 - SPA - 00110111
+    "EPA",  // 0x97 - EPA - 00111000
+    "SOS",  // 0x98 - SOS - 00111001
+    "SGCI", // 0x99 - SGCI - 00111010
+    "SCI",  // 0x9A - SCI - 00111011
+    "CSI",  // 0x9B - CSI - 00111100
+    "ST",   // 0x9C - ST - 00111101
+    "OSC",  // 0x9D - OSC - 00111110
+    "PM",   // 0x9E - PM - 00111111
+    "APC",  // 0x9F - APC - 01000000
+);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum ColoringState {
     NoColor,
     NewColor,
@@ -134,7 +159,7 @@ pub struct DisplayChar(u32);
 
 impl DisplayChar {
     pub(crate) fn from_utf8_grapheme_to_dstring(grapheme: &str, string: &mut DisplayString) {
-        if let Some(_) = emojis::get(grapheme) {
+        if emojis::get(grapheme).is_some() {
             let mut lock = EMOJI_LIST.lock().unwrap();
             let idx = lock.len() as u32;
             let idx = idx | 0x4000_0000;
@@ -143,13 +168,11 @@ impl DisplayChar {
                 string.push(Self(idx));
                 string.push(Self(0x7FFF_FFFF));
             }
+        } else if grapheme.chars().count() == 1 {
+            let c = grapheme.chars().next().unwrap() as u32;
+            Self::from_u8_checked(c, string)
         } else {
-            if grapheme.chars().count() == 1 {
-                let c = grapheme.chars().next().unwrap() as u32;
-                Self::from_u8_checked(c, string)
-            } else {
-                unsafe { string.push(Self::from_lsu(LittleStringUni::new(grapheme))) }
-            }
+            unsafe { string.push(Self::from_lsu(LittleStringUni::new(grapheme))) }
         }
     }
 
@@ -204,7 +227,7 @@ impl DisplayChar {
         unsafe {
             if c < 0x20 {
                 Self::from_lookup_idx(c, string);
-            } else if c >= 0x7F && c < 0xA0 {
+            } else if (0x7F..0xA0).contains(&c) {
                 let idx = c - const { 0x7f - 0b00100000 };
                 Self::from_lookup_idx(idx, string);
             } else {
@@ -248,12 +271,10 @@ impl DisplayChar {
         // Same as [`std::char::convert::char_try_from_u32`]
         } else if (self.0 ^ 0xD800).wrapping_sub(0x800) < 0x110000 - 0x800 {
             ColoringState::NoColor
+        } else if self.0 & 3 == 0 {
+            ColoringState::NewColor
         } else {
-            if self.0 & 3 == 0 {
-                ColoringState::NewColor
-            } else {
-                ColoringState::PrevColor
-            }
+            ColoringState::PrevColor
         }
     }
 
@@ -276,7 +297,7 @@ impl DisplayChar {
             false
         } else if self.0 == 0x7FFF_FFFF {
             if first {
-                s.push_str("…");
+                s.push('…');
                 false
             } else {
                 s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
@@ -284,7 +305,7 @@ impl DisplayChar {
             }
         } else if self.0 & 0x4000_0000u32 != 0 {
             if last {
-                s.push_str("…");
+                s.push('…');
                 false
             } else {
                 s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
@@ -324,29 +345,29 @@ impl DisplayChar {
         // emoji second:     DO NOTHING
 
         if let Ok(c) = char::try_from(self.0) {
-            file.write(c.encode_utf8(&mut [0; 4]).as_bytes())?;
+            file.write_all(c.encode_utf8(&mut [0; 4]).as_bytes())?;
         } else if self.0 & 0x8000_0000u32 != 0 {
             let index = self.0 & 0x7fff_ffffu32;
             let index = index as usize;
             let list_lock = NORMAL_LIST.lock().unwrap();
-            file.write(list_lock[index].as_bytes())?;
+            file.write_all(list_lock[index].as_bytes())?;
         } else if self.0 == 0x7FFF_FFFF {
             // Do nothing
         } else if self.0 & 0x4000_0000u32 != 0 {
             let index = self.0 & 0x3fff_ffffu32;
             let index = index as usize;
             let list_lock = EMOJI_LIST.lock().unwrap();
-            file.write(list_lock[index].as_bytes())?;
+            file.write_all(list_lock[index].as_bytes())?;
         } else if self.0 & 3 != 0 {
             // Do nothing
         } else if self.0 < const { 0xD800 + (0x20 * 4) } {
             let idx = self.0 - const { 0xD800 };
             let ch = idx / 4;
-            file.write(&[ch as u8])?;
+            file.write_all(&[ch as u8])?;
         } else {
             let idx = self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 };
             let ch = idx / 4;
-            file.write(&[ch as u8])?;
+            file.write_all(&[ch as u8])?;
         }
         Ok(())
     }
@@ -361,7 +382,7 @@ impl DisplayChar {
         // emoji second:     PANIC
 
         if self.0 < 0x100 {
-            file.write(&[self.0 as u8])?;
+            file.write_all(&[self.0 as u8])?;
         } else if self.0 & 3 != 0 {
             // Nothing to do
         } else if self.0 < 0xD800 {
@@ -372,11 +393,11 @@ impl DisplayChar {
         } else if self.0 < const { 0xD800 + (0x20 * 4) } {
             let idx = self.0 - const { 0xD800 };
             let ch = idx / 4;
-            file.write(&[ch as u8])?;
+            file.write_all(&[ch as u8])?;
         } else if self.0 < const { 0xD800 + (65 * 4) } {
             let idx = self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 };
             let ch = idx / 4;
-            file.write(&[ch as u8])?;
+            file.write_all(&[ch as u8])?;
         } else {
             panic!(
                 "raw buffer contains non-raw chars. It should not happen. You called \
@@ -444,9 +465,9 @@ impl DisplayChar {
     }
 }
 
-impl Into<u32> for DisplayChar {
-    fn into(self) -> u32 {
-        self.0
+impl From<DisplayChar> for u32 {
+    fn from(value: DisplayChar) -> Self {
+        value.0
     }
 }
 

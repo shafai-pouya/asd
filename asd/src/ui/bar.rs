@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL, C_FG_BAR};
+use crate::assets::colors::{C_BG_BAR, C_BG_NORMAL, C_FG_BAR};
 use crate::backend::buffers::BuffersRenderGuard;
 use chrono::Local;
 use ratatui::buffer::Buffer;

@@ -1,5 +1,5 @@
 use crate::App;
-use crate::assets::colors::colors::{
+use crate::assets::colors::{
     C_BG_CURSOR, C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR, C_FG_CURSOR_SELECTION,
     C_FG_LINE_NUMBERS, C_FG_SELECTION,
 };
@@ -80,7 +80,7 @@ pub(crate) fn render_file(
         (active_buffer.scrollbar.top_position + 1
             ..(active_buffer.scrollbar.top_position + content_area.height as usize + 1)
                 .min(active_buffer.content.len() + 1))
-            .map(|n| Line::raw(format!("{} ", n.to_string())).alignment(Alignment::Right))
+            .map(|n| Line::raw(format!("{} ", n)).alignment(Alignment::Right))
             .collect::<Vec<_>>(),
     )
     .render(lines_area, buf);

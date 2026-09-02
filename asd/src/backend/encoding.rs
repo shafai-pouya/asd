@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
+use crate::assets::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
 use crate::backend::content::Content;
 use crate::backend::display_char::DisplayChar;
 use crate::backend::display_string::DisplayString;
@@ -13,10 +13,10 @@ use std::path::Path;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub enum LineEnding {
-    CR,
-    LF,
+    Cr,
+    Lf,
     #[default]
-    CRLF,
+    Crlf,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -28,9 +28,9 @@ pub enum Encoding {
 impl LineEnding {
     pub(crate) fn get(&self) -> &[u8] {
         match self {
-            LineEnding::CR => b"\r",
-            LineEnding::LF => b"\n",
-            LineEnding::CRLF => b"\r\n",
+            LineEnding::Cr => b"\r",
+            LineEnding::Lf => b"\n",
+            LineEnding::Crlf => b"\r\n",
         }
     }
 }
@@ -56,7 +56,7 @@ impl Encoding {
                                             message: format!(
                                                 "[E:{}] Error writing to file: {}",
                                                 e.kind() as u32,
-                                                e.kind().to_string()
+                                                e.kind()
                                             ),
                                             color: C_LOG_ERROR,
                                             handler: None,
@@ -74,7 +74,7 @@ impl Encoding {
                                         message: format!(
                                             "[E:{}] Error writing to file: {}",
                                             e.kind() as u32,
-                                            e.kind().to_string()
+                                            e.kind()
                                         ),
                                         color: C_LOG_ERROR,
                                         handler: None,
@@ -93,7 +93,7 @@ impl Encoding {
                                         message: format!(
                                             "[E:{}] Error writing to file: {}",
                                             e.kind() as u32,
-                                            e.kind().to_string()
+                                            e.kind()
                                         ),
                                         color: C_LOG_ERROR,
                                         handler: None,
@@ -117,7 +117,7 @@ impl Encoding {
                     message: format!(
                         "[E:{}] Error opening file to save: {}",
                         e.kind() as u32,
-                        e.kind().to_string()
+                        e.kind()
                     ),
                     color: C_LOG_ERROR,
                     handler: None,
@@ -136,7 +136,7 @@ impl Encoding {
                     message: format!(
                         "[E:{}] Error checking existence of the file: {}",
                         e.kind() as u32,
-                        e.kind().to_string()
+                        e.kind()
                     ),
                     color: C_LOG_ERROR,
                     handler: None,
@@ -182,7 +182,7 @@ impl Encoding {
                                 message: format!(
                                     "[E:{}] Error Opening File for in append mode: {}",
                                     e.kind() as u32,
-                                    e.kind().to_string()
+                                    e.kind()
                                 ),
                                 color: C_LOG_ERROR,
                                 handler: None,
@@ -203,7 +203,7 @@ impl Encoding {
                             message: format!(
                                 "[E:{}] Error Opening File for the first time: {}",
                                 e.kind() as u32,
-                                e.kind().to_string()
+                                e.kind()
                             ),
                             color: C_LOG_ERROR,
                             handler: None,
@@ -220,24 +220,18 @@ impl Encoding {
         let mut lines: Vec<DisplayString> = vec![];
         let mut last = String::new();
         let mut line_ending = None;
-        let mut chars = content.chars().peekable().into_iter();
+        let mut chars = content.chars().peekable();
         while let Some(ch) = chars.next() {
             if ch == '\n' {
-                line_ending.get_or_insert(LineEnding::LF);
-                lines.push(DisplayString::from_str(&std::mem::replace(
-                    &mut last,
-                    String::new(),
-                )));
+                line_ending.get_or_insert(LineEnding::Lf);
+                lines.push(DisplayString::from_str(&std::mem::take(&mut last)));
             } else if ch == '\r' {
-                lines.push(DisplayString::from_str(&std::mem::replace(
-                    &mut last,
-                    String::new(),
-                )));
+                lines.push(DisplayString::from_str(&std::mem::take(&mut last)));
                 if chars.peek() == Some(&'\n') {
                     chars.next();
-                    line_ending.get_or_insert(LineEnding::CRLF);
+                    line_ending.get_or_insert(LineEnding::Crlf);
                 } else {
-                    line_ending.get_or_insert(LineEnding::CR);
+                    line_ending.get_or_insert(LineEnding::Cr);
                 }
             } else {
                 last.push(ch); // It's Ok
@@ -245,7 +239,7 @@ impl Encoding {
         }
         lines.push(DisplayString::from_str(&last));
         (
-            Encoding::UTF8(line_ending.unwrap_or(LineEnding::CRLF)),
+            Encoding::UTF8(line_ending.unwrap_or(LineEnding::Crlf)),
             Content::from_lines(lines),
         )
     }
@@ -284,9 +278,9 @@ impl Encoding {
 impl Display for LineEnding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LineEnding::CR => write!(f, "CR"),
-            LineEnding::LF => write!(f, "LF"),
-            LineEnding::CRLF => write!(f, "CRLF"),
+            LineEnding::Cr => write!(f, "CR"),
+            LineEnding::Lf => write!(f, "LF"),
+            LineEnding::Crlf => write!(f, "CRLF"),
         }
     }
 }

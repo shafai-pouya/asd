@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::C_FG_SCROLLBAR;
+use crate::assets::colors::C_FG_SCROLLBAR;
 use crate::backend::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::prelude::{Line, Span};

@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{
+use crate::assets::colors::{
     C_BG_CURSOR_SELECTION, C_BG_SELECTION, C_FG_CURSOR_SELECTION, C_FG_SELECTION, C_LOG_ERROR,
     C_LOG_INFO, C_LOG_TODO,
 };
@@ -63,7 +63,7 @@ impl Mode for SaveAsMode {
         });
 
         // Render cursor
-        if let Some(_) = self.data.selection {
+        if self.data.selection.is_some() {
             app.terminal_cursor.hide();
         } else {
             app.terminal_cursor
@@ -154,7 +154,7 @@ impl SaveAsMode {
                              // todo!();
                              return false;
                          }
-                         return true;
+                         true
                      },
 
 
@@ -171,7 +171,7 @@ impl SaveAsMode {
                                 if let Some(sel) = data.selection {
                                     let min = sel.min(data.cursor);
                                     let max = sel.max(data.cursor);
-                                    app.internal_clipboard = (Encoding::UTF8(LineEnding::CRLF), movec![movec![
+                                    app.internal_clipboard = (Encoding::UTF8(LineEnding::Crlf), movec![movec![
                                         LittleString::Big(DisplayString::from_str(
                                             &data.filepath[min as usize..max as usize]
                                         ))
@@ -216,7 +216,7 @@ impl SaveAsMode {
                                     let max = sel.max(data.cursor);
                                     data.selection = None;
                                     data.cursor = min;
-                                    app.internal_clipboard = (Encoding::UTF8(LineEnding::CRLF), movec![movec![
+                                    app.internal_clipboard = (Encoding::UTF8(LineEnding::Crlf), movec![movec![
                                         LittleString::Big(DisplayString::from_str(
                                             &data.filepath[min as usize..max as usize]
                                         ))
@@ -280,11 +280,9 @@ impl SaveAsMode {
                                     data.selection = None;
                                     data.cursor = min;
                                     data.filepath.drain(min as usize..max as usize);
-                                } else {
-                                    if data.cursor != 0 {
-                                        data.cursor -= 1;
-                                        data.filepath.remove(data.cursor as usize);
-                                    }
+                                } else if data.cursor != 0 {
+                                    data.cursor -= 1;
+                                    data.filepath.remove(data.cursor as usize);
                                 }
                                 false
                             }
@@ -295,10 +293,8 @@ impl SaveAsMode {
                                     data.selection = None;
                                     data.cursor = min;
                                     data.filepath.drain(min as usize..max as usize);
-                                } else {
-                                    if data.cursor < data.filepath.len() as u16 {
-                                        data.filepath.remove(data.cursor as usize);
-                                    }
+                                } else if data.cursor < data.filepath.len() as u16 {
+                                    data.filepath.remove(data.cursor as usize);
                                 }
                                 false
                             }

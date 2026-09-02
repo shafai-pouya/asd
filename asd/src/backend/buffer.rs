@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::C_LOG_INFO;
+use crate::assets::colors::C_LOG_INFO;
 use crate::assets::constants::DURATION_BIG_TIMER;
 use crate::backend::caret::Carets;
 use crate::backend::checkpoint::Checkpoints;

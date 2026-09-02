@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{C_TREE_FG_DIR, C_TREE_FG_FILE};
+use crate::assets::colors::{C_TREE_FG_DIR, C_TREE_FG_FILE};
 use crate::assets::constants::{TREE_FILE_LOADED_SYMBOL, TREE_FILE_MODIFIED_SYMBOL};
 use crate::backend::buffers::{BUFFERS, Buffers, Inode};
 use crate::backend::file_tree::NodePointer;
@@ -160,7 +160,7 @@ impl FileTreeNode {
         coloring_start_x += 1;
         str.push(' ');
         let mut parent = self as &FileTreeNode;
-        if ptr.inner.len() != 0 {
+        if !ptr.inner.is_empty() {
             for &i in &ptr.inner[..ptr.inner.len() - 1] {
                 if i + 1 == parent.children.len() {
                     str.push_str("  ");

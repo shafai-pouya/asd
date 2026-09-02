@@ -4,7 +4,7 @@ mod edit_controller;
 mod edit_operators;
 mod ui;
 
-use crate::assets::colors::colors::{C_LOG_ERROR, C_LOG_HINT};
+use crate::assets::colors::{C_LOG_ERROR, C_LOG_HINT};
 use crate::assets::constants::POLL_DURATION;
 use crate::backend::buffers::BUFFERS;
 use crate::backend::encoding::Encoding;
@@ -267,7 +267,7 @@ fn main() {
     }
 
     // Handle args
-    let mut args = args().into_iter();
+    let mut args = args();
     args.next();
     let app = if let Some(arg) = args.next() {
         if arg == "--help" {

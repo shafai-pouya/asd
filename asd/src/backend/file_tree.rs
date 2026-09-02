@@ -70,7 +70,7 @@ impl FileTree {
             MouseEventKind::Down(MouseButton::Left) => {}
             MouseEventKind::ScrollDown => {
                 self.scrollbar_y += 5;
-                let lines_n = NodePointer::get_on_nth_line(usize::MAX, &self).unwrap_err(); // Safety: There is no way it reaches usize::MAX
+                let lines_n = NodePointer::get_on_nth_line(usize::MAX, self).unwrap_err(); // Safety: There is no way it reaches usize::MAX
                 if lines_n + 10 < self.scrollbar_y + last_tree_rect.height as usize {
                     self.scrollbar_y =
                         (lines_n + 10).saturating_sub(last_tree_rect.height as usize);
@@ -87,7 +87,7 @@ impl FileTree {
         }
 
         let n = event.row as usize + self.scrollbar_y;
-        let Ok(pointer) = NodePointer::get_on_nth_line(n, &self) else {
+        let Ok(pointer) = NodePointer::get_on_nth_line(n, self) else {
             return;
         };
 
@@ -122,7 +122,7 @@ impl FileTree {
         buffer: &mut ratatui::buffer::Buffer,
     ) -> String {
         let mut to_return = String::new();
-        let Ok(mut ptr) = NodePointer::get_on_nth_line(start, &self) else {
+        let Ok(mut ptr) = NodePointer::get_on_nth_line(start, self) else {
             return to_return;
         };
         for displaying_row in 0..len {
@@ -137,7 +137,7 @@ impl FileTree {
                 },
                 buffer,
             );
-            if ptr.next(&self).is_err() {
+            if ptr.next(self).is_err() {
                 return to_return;
             };
         }

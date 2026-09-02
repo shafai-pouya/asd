@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::C_LOG_INFO;
+use crate::assets::colors::C_LOG_INFO;
 use crate::backend::buffer::Buffer;
 use crate::backend::caret::{Caret, CursorEditor, Position};
 use crate::backend::checkpoint::Checkpoints;
@@ -286,7 +286,7 @@ impl EditController for Buffer {
 
         self.carets
             .carets
-            .resize_with(checkpoint.inner.len(), || Caret::new());
+            .resize_with(checkpoint.inner.len(), Caret::new);
 
         let mut ghost_checkpoints = Checkpoints::ghost();
         for (idx, edit) in checkpoint.inner.iter().enumerate().rev() {
@@ -349,7 +349,7 @@ impl EditController for Buffer {
 
         self.carets
             .carets
-            .resize_with(checkpoint.inner.len(), || Caret::new());
+            .resize_with(checkpoint.inner.len(), Caret::new);
 
         let mut ghost_checkpoints = Checkpoints::ghost();
         for (idx, edit) in checkpoint.inner.iter().enumerate().rev() {
@@ -513,8 +513,7 @@ impl EditController for Buffer {
         let end_line = y.max(self.drag_start_pos.1).min(self.content.len() - 1);
         let n_lines = 1 + end_line - start_line;
         self.carets.carets.resize_with(n_lines, Caret::new);
-        let mut idx = 0;
-        for l in start_line..=end_line {
+        for (idx, l) in (start_line..=end_line).enumerate() {
             let mut cursor = Cursor::new(l, x);
             cursor.validate_wide_chars(&self.content);
             let mut selection = Selection::new(l, self.drag_start_pos.0);
@@ -523,7 +522,6 @@ impl EditController for Buffer {
                 self.carets.carets[idx].set_position_unchecked(Position::new(cursor, selection));
             }
             self.carets.carets[idx].merge_sel_pos();
-            idx += 1;
         }
     }
 
@@ -538,7 +536,7 @@ impl EditController for Buffer {
 
         let current_char = self.content[line]
             .get(start_col)
-            .map(|a| *a)
+            .copied()
             .unwrap_or(unsafe { const { DisplayChar::from_one_cell_utf8_char_unchecked('_') } });
         if !current_char.is_variable_name() {
             return;

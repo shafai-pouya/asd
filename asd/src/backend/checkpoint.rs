@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::C_LOG_INFO;
+use crate::assets::colors::C_LOG_INFO;
 use crate::assets::constants::{N_DRAIN_CHECKPOINTS, N_MAX_CHECKPOINTS};
 use crate::backend::caret::Carets;
 use crate::backend::content::Content;
@@ -95,15 +95,14 @@ impl Checkpoints {
                         line -= 1;
                         col = content[line].len();
                     }
-                    let edit = SingleEdit {
+                    SingleEdit {
                         edit: CheckpointEdit {
                             start_line: line,
                             start_col: col,
                             removed_data: std::mem::replace(&mut caret.removed_text, movec!()),
                             added_data: result,
                         },
-                    };
-                    edit
+                    }
                 })
                 .collect(),
         })

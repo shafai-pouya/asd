@@ -33,12 +33,11 @@ impl LogsType {
         last_content_rect: Rect,
     ) -> Option<LogEvent> {
         let logs_lock = LOGS_LOCK.lock().unwrap();
-        if me.row > last_content_rect.height + 1 - logs_lock.len() as u16 {
-            if let Some(log) = logs_lock
+        if me.row > last_content_rect.height + 1 - logs_lock.len() as u16
+            && let Some(log) = logs_lock
                 .get(me.row as usize + logs_lock.len() - 2 - last_content_rect.height as usize)
-            {
-                return log.handler;
-            }
+        {
+            return log.handler;
         }
         None
     }

@@ -1,5 +1,5 @@
 use crate::App;
-use crate::assets::colors::colors::{C_BG_BAR, C_BG_NORMAL};
+use crate::assets::colors::{C_BG_BAR, C_BG_NORMAL};
 use crate::backend::buffers::BuffersRenderGuard;
 use crate::ui::bar::render_bar;
 use crate::ui::file::render_file;

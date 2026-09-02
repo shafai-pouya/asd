@@ -161,12 +161,12 @@ impl<T> Index<usize> for MostlyOneVec<T> {
     type Output = T;
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            MostlyOneVec::Zero => None.unwrap(),
+            MostlyOneVec::Zero => panic!(),
             MostlyOneVec::One(i) => {
                 if index == 0 {
                     i
                 } else {
-                    None.unwrap()
+                    panic!()
                 }
             }
             MostlyOneVec::More(vec) => &vec[index],
@@ -177,12 +177,12 @@ impl<T> Index<usize> for MostlyOneVec<T> {
 impl<T> IndexMut<usize> for MostlyOneVec<T> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            MostlyOneVec::Zero => None.unwrap(),
+            MostlyOneVec::Zero => panic!(),
             MostlyOneVec::One(i) => {
                 if index == 0 {
                     i
                 } else {
-                    None.unwrap()
+                    panic!()
                 }
             }
             MostlyOneVec::More(vec) => &mut vec[index],
@@ -250,7 +250,7 @@ impl<T> MostlyOneVec<T> {
                 v.insert(index, item);
                 *self = MostlyOneVec::More(v);
             }
-            _ => None.unwrap(),
+            _ => panic!(),
         }
     }
     pub(crate) fn with_capacity(cap: usize) -> Self {
@@ -267,7 +267,7 @@ impl<T> MostlyOneVec<T> {
                 *self = MostlyOneVec::Zero;
                 i
             }
-            MostlyOneVec::Zero | MostlyOneVec::One(_) => None.unwrap(),
+            MostlyOneVec::Zero | MostlyOneVec::One(_) => panic!(),
             MostlyOneVec::More(mut v) => {
                 let to_return = v.swap_remove(index);
                 *self = MostlyOneVec::More(v);
@@ -417,12 +417,9 @@ impl<T> MostlyOneVec<T> {
         match (self, other) {
             (MostlyOneVec::Zero, MostlyOneVec::Zero) => MostlyOneVec::Zero,
             (MostlyOneVec::One(i), MostlyOneVec::One(j)) => MostlyOneVec::One(f((i, j))),
-            (MostlyOneVec::More(v1), MostlyOneVec::More(v2)) => MostlyOneVec::More(
-                v1.into_iter()
-                    .zip(v2.into_iter())
-                    .map(f)
-                    .collect::<Vec<_>>(),
-            ),
+            (MostlyOneVec::More(v1), MostlyOneVec::More(v2)) => {
+                MostlyOneVec::More(v1.into_iter().zip(v2).map(f).collect::<Vec<_>>())
+            }
             (MostlyOneVec::Zero, MostlyOneVec::One(_))
             | (MostlyOneVec::Zero, MostlyOneVec::More(_))
             | (MostlyOneVec::One(_), MostlyOneVec::Zero)
@@ -453,7 +450,7 @@ impl<T> FromIterator<T> for MostlyOneVec<T> {
             return MostlyOneVec::One(first);
         };
         let mut v = vec![first, second];
-        while let Some(i) = iter.next() {
+        for i in iter {
             v.push(i);
         }
         MostlyOneVec::More(v)
@@ -462,7 +459,7 @@ impl<T> FromIterator<T> for MostlyOneVec<T> {
 
 #[macro_export]
 macro_rules! movec {
-    [] => {crate::backend::mostly_one_vec::MostlyOneVec::Zero};
-    [$a:expr] => {crate::backend::mostly_one_vec::MostlyOneVec::One($a)};
-    [$a:expr, $($b:expr),+] => {crate::backend::mostly_one_vec::MostlyOneVec::More(vec![$a, $($b),+])};
+    [] => {$crate::backend::mostly_one_vec::MostlyOneVec::Zero};
+    [$a:expr] => {$crate::backend::mostly_one_vec::MostlyOneVec::One($a)};
+    [$a:expr, $($b:expr),+] => {$crate::backend::mostly_one_vec::MostlyOneVec::More(vec![$a, $($b),+])};
 }

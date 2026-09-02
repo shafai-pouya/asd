@@ -178,7 +178,7 @@ impl Content {
                 );
             }
             (0, _) | (1, _) => {
-                let last_line = self.lines.drain(min.0 + 1..max.0 + 1).last().unwrap(); // We checked the len in the match case
+                let last_line = self.lines.drain(min.0 + 1..max.0 + 1).next_back().unwrap(); // We checked the len in the match case
 
                 self.lines[min.0].truncate(min.1);
                 unsafe {
@@ -186,7 +186,7 @@ impl Content {
                         new_text
                             .get(0)
                             .map(AsRef::as_ref)
-                            .unwrap_or(Default::default()),
+                            .unwrap_or(DisplaySlice::EMPTY),
                     );
                     self.lines[min.0].push_slice(&last_line[max.1..]);
                 } // Safety: The caller
@@ -215,7 +215,7 @@ impl Content {
                         min.0 + 1..max.0 + 1,
                         new_text.map(LittleString::into_dstring),
                     )
-                    .last()
+                    .next_back()
                     .unwrap(); // We checked the len
                 self.lines[min.0].truncate(min.1);
                 unsafe {
@@ -259,18 +259,14 @@ impl Content {
             .map(|i| {
                 let min = cursors.carets[i].get_position().get_min();
                 let max = cursors.carets[i].get_position().get_max(false);
-                let this_cursor = (min.0..=max.0)
-                    .map(|j| {
-                        let part = match (j == min.0, j == max.0) {
-                            (true, true) => LittleString::from_slice(&self.lines[j][min.1..max.1]),
-                            (true, false) => LittleString::from_slice(&self.lines[j][min.1..]),
-                            (false, true) => LittleString::from_slice(&self.lines[j][..max.1]),
-                            (false, false) => LittleString::from_slice(&self.lines[j]),
-                        };
-                        part
+                (min.0..=max.0)
+                    .map(|j| match (j == min.0, j == max.0) {
+                        (true, true) => LittleString::from_slice(&self.lines[j][min.1..max.1]),
+                        (true, false) => LittleString::from_slice(&self.lines[j][min.1..]),
+                        (false, true) => LittleString::from_slice(&self.lines[j][..max.1]),
+                        (false, false) => LittleString::from_slice(&self.lines[j]),
                     })
-                    .collect::<MostlyOneVec<_>>();
-                this_cursor
+                    .collect::<MostlyOneVec<_>>()
             })
             .collect()
     }

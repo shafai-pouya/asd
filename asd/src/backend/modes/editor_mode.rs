@@ -48,7 +48,7 @@ impl EditorMode {
                             BUFFERS.get_change_guard().inner_mut().active_mut().operate_tab(app.last_content_rect);
                             return false;
                         }
-                        return true;
+                        true
                     },
 
 
@@ -193,7 +193,7 @@ impl EditorMode {
                         }
                         active_buffer.operate_arrow_end(app.last_content_rect);
 
-                        return false;
+                        false
                     },
 
                     /// Remove methods

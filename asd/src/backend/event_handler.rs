@@ -3,17 +3,21 @@ use crate::assets::constants::DOUBLE_CLICK_DURATION;
 use crossterm::event::{Event, KeyEvent, MouseEvent, MouseEventKind};
 use std::time::Instant;
 
+pub type MouseHandlerFn<T> = fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool;
+pub type KeyHandlerFn<T> = fn(arg: &mut T, &mut App, &KeyEvent) -> bool;
+pub type DoubleClickHandlerFn<T> = fn(arg: &mut T, &mut App, &MouseEvent) -> bool;
+
 pub struct EventHandler<T> {
-    key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent) -> bool>,
-    mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool>,
-    double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>,
+    key_handlers: Vec<KeyHandlerFn<T>>,
+    mouse_handlers: Vec<MouseHandlerFn<T>>,
+    double_click_handlers: Vec<DoubleClickHandlerFn<T>>,
 }
 
 impl<T> EventHandler<T> {
     pub(crate) fn new(
-        key_handlers: Vec<fn(arg: &mut T, &mut App, &KeyEvent) -> bool>,
-        mouse_handlers: Vec<fn(arg: &mut T, &EventHandler<T>, &mut App, &MouseEvent) -> bool>,
-        double_click_handlers: Vec<fn(arg: &mut T, &mut App, &MouseEvent) -> bool>,
+        key_handlers: Vec<KeyHandlerFn<T>>,
+        mouse_handlers: Vec<MouseHandlerFn<T>>,
+        double_click_handlers: Vec<DoubleClickHandlerFn<T>>,
     ) -> Self {
         Self {
             key_handlers,

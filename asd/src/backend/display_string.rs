@@ -1,4 +1,4 @@
-use crate::assets::colors::colors::{C_BG_SPECIAL_BYTE1, C_BG_SPECIAL_BYTE2};
+use crate::assets::colors::{C_BG_SPECIAL_BYTE1, C_BG_SPECIAL_BYTE2};
 use crate::backend::display_char::{ColoringState, DisplayChar};
 use crate::backend::encoding::Encoding;
 use crate::backend::little_string::{LSIntoIter, LittleString};
@@ -56,7 +56,7 @@ impl Deref for DisplayString {
     type Target = DisplaySlice;
 
     fn deref(&self) -> &Self::Target {
-        From::from(&self[0..])
+        &self[0..]
     }
 }
 
@@ -174,7 +174,9 @@ impl Default for &'static DisplaySlice {
 }
 
 impl DisplaySlice {
-    pub(crate) fn from_slice(slice: &[DisplayChar]) -> &Self {
+    pub const EMPTY: &'static Self = Self::from_slice(&[]);
+
+    pub(crate) const fn from_slice(slice: &[DisplayChar]) -> &Self {
         unsafe { &*(slice as *const [DisplayChar] as *const DisplaySlice) }
     }
 
@@ -227,7 +229,7 @@ impl DisplaySlice {
 
     #[inline]
     pub(crate) fn iter(&'_ self) -> slice::Iter<'_, DisplayChar> {
-        (&self).into_iter()
+        self.into_iter()
     }
 
     #[inline]

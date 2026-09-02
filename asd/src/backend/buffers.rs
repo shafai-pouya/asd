@@ -1,5 +1,5 @@
 use crate::App;
-use crate::assets::colors::colors::C_LOG_TODO;
+use crate::assets::colors::C_LOG_TODO;
 use crate::assets::constants::READ_ONLY_PATH;
 use crate::backend::buffer::Buffer;
 use crate::backend::file_tree_node::OnlineState;
@@ -60,19 +60,19 @@ impl BuffersType {
 
         let mut buffers = self.get_guard();
 
-        for (_, buffer) in unsafe { buffers.buffers.inner_mut() } {
-            if let Some(t) = buffer.checkpoints.little_timer_deadline {
-                if now >= t {
-                    buffer.checkpoints.little_timer_deadline = None;
-                    buffer.commit();
-                }
+        for buffer in unsafe { buffers.buffers.inner_mut().values_mut() } {
+            if let Some(t) = buffer.checkpoints.little_timer_deadline
+                && now >= t
+            {
+                buffer.checkpoints.little_timer_deadline = None;
+                buffer.commit();
             }
 
-            if let Some(t) = buffer.checkpoints.big_timer_deadline {
-                if now >= t {
-                    buffer.checkpoints.big_timer_deadline = None;
-                    buffer.commit();
-                }
+            if let Some(t) = buffer.checkpoints.big_timer_deadline
+                && now >= t
+            {
+                buffer.checkpoints.big_timer_deadline = None;
+                buffer.commit();
             }
         }
     }
@@ -132,7 +132,7 @@ impl BuffersCheckGuard<'_> {
     }
 
     pub(crate) fn commit_all(&mut self) {
-        for (_, buffer) in &mut self.buffers.buffers.inner {
+        for buffer in self.buffers.buffers.inner.values_mut() {
             buffer.commit();
         }
     }
