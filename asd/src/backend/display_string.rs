@@ -1,10 +1,6 @@
-use crate::assets::colors::{C_BG_SPECIAL_BYTE1, C_BG_SPECIAL_BYTE2};
-use crate::backend::display_char::{ColoringState, DisplayChar};
+use crate::backend::display_char::{CharStyle, CharValue, DisplayChar};
 use crate::backend::encoding::Encoding;
 use crate::backend::little_string::{LSIntoIter, LittleString};
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::style::Style;
 use std::io::{Error, Write};
 use std::ops::{Deref, Index, IndexMut, Range, RangeFrom, RangeTo};
 use std::slice::SliceIndex;
@@ -84,10 +80,10 @@ impl DisplayString {
         self.gms.reserve(cap);
     }
 
-    pub(crate) fn from_str(value: &str) -> Self {
+    pub(crate) fn from_str(value: &str, style: CharStyle) -> Self {
         let mut self_ = Self::empty();
         for x in value.graphemes(true) {
-            DisplayChar::from_utf8_grapheme_to_dstring(x, &mut self_);
+            CharValue::from_utf8_grapheme_to_dstring(x, &mut self_, style);
         }
         self_
     }
@@ -144,16 +140,6 @@ impl DisplayString {
     {
         self.gms.get(range)
     }
-
-    // pub(crate) fn null() -> Self { // todo: temporary function
-    //     Self {
-    //         gms: vec![
-    //             DisplayChar::null1(),
-    //             DisplayChar::null2(),
-    //             DisplayChar::null3()
-    //         ]
-    //     }
-    // }
 }
 
 #[repr(transparent)] // Should be because some unsafe types later
@@ -180,46 +166,6 @@ impl DisplaySlice {
         unsafe { &*(slice as *const [DisplayChar] as *const DisplaySlice) }
     }
 
-    pub(crate) fn to_string_to_show(
-        &self,
-        start_x: u16,
-        start_y: u16,
-        buf: &mut Buffer,
-        emojis_to_render: &mut Vec<(u16, u16, u32)>,
-    ) -> String {
-        let mut second_color = true;
-        let mut string = String::new();
-        for (&i, x) in self.gms.iter().zip(start_x..) {
-            if i.self_to_string_to_show(
-                x == start_x,
-                self.len() as u16 - (x - start_x) == 1,
-                &mut string,
-            ) {
-                emojis_to_render.push((x, start_y, i.into()))
-            }
-            let wide_idx = i.get_coloring_state();
-            if wide_idx == ColoringState::NewColor {
-                second_color = !second_color;
-            }
-            if wide_idx != ColoringState::NoColor {
-                buf.set_style(
-                    Rect {
-                        x,
-                        y: start_y,
-                        width: 1,
-                        height: 1,
-                    },
-                    Style::new().bg(if second_color {
-                        C_BG_SPECIAL_BYTE2
-                    } else {
-                        C_BG_SPECIAL_BYTE1
-                    }),
-                )
-            }
-        }
-        string
-    }
-
     #[inline]
     pub(crate) fn to_dstring(&self) -> DisplayString {
         DisplayString {
@@ -242,7 +188,7 @@ impl DisplaySlice {
     pub(crate) unsafe fn utf8__write_to<F: Write>(&self, file: &mut F) -> Result<(), Error> {
         for i in self {
             unsafe {
-                i.utf8__write_to(file)?;
+                i.char().utf8__write_to(file)?;
             } // Safety: the caller
         }
         Ok(())
@@ -253,7 +199,7 @@ impl DisplaySlice {
     pub(crate) unsafe fn raw__write_to<F: Write>(&self, file: &mut F) -> Result<(), Error> {
         for i in self {
             unsafe {
-                i.raw__write_to(file)?;
+                i.char().raw__write_to(file)?;
             } // Safety: the caller
         }
         Ok(())
@@ -275,8 +221,8 @@ impl DisplaySlice {
         for &i in self {
             unsafe {
                 match encoding {
-                    Encoding::UTF8(_) => i.utf8__write_to(&mut string).unwrap(),
-                    Encoding::Raw => i.raw__write_to(&mut string).unwrap(),
+                    Encoding::UTF8(_) => i.char().utf8__write_to(&mut string).unwrap(),
+                    Encoding::Raw => i.char().raw__write_to(&mut string).unwrap(),
                 }
             }
         }

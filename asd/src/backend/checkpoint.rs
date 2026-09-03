@@ -38,6 +38,10 @@ impl Checkpoints {
         self.little_timer_deadline = None;
         self.big_timer_deadline = None;
         for caret in carets {
+            #[cfg(debug_assertions)]
+            {
+                caret.started = false;
+            }
             caret.added_len = 0;
             caret.removed_text = movec!();
         }
@@ -48,6 +52,14 @@ impl Checkpoints {
         if carets.carets.iter().all(|c| {
             c.added_len == 0 && c.removed_text.get(0).map(|a| a.len() == 0).unwrap_or(true)
         }) {
+            for caret in carets {
+                #[cfg(debug_assertions)]
+                {
+                    caret.started = false;
+                }
+                caret.added_len = 0;
+                caret.removed_text = movec!();
+            }
             return;
         }
         self.push(Checkpoint {

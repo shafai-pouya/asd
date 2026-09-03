@@ -1,5 +1,5 @@
 use crate::assets::constants::{N_MAX_LITTLE, N_MAX_LITTLE_UNI};
-use crate::backend::display_char::DisplayChar;
+use crate::backend::display_char::{CharStyle, CharValue, DisplayChar};
 use crate::backend::display_string::{DisplaySlice, DisplayString};
 use crate::backend::encoding::Encoding;
 use std::ops::Deref;
@@ -71,10 +71,10 @@ impl LittleString {
         }
     }
 
-    pub(crate) fn from_raw(bytes: &[u8]) -> Self {
+    pub(crate) fn from_raw(bytes: &[u8], style: CharStyle) -> Self {
         let mut s = DisplayString::empty();
         for &b in bytes {
-            DisplayChar::from_u8_checked(b as u32, &mut s)
+            CharValue::from_u8(b as u32, &mut s, style)
         }
         Self::Big(s)
     }
@@ -86,7 +86,7 @@ impl LittleString {
                 let mut new = DisplayString::with_capacity(self.len());
                 for i in self.iter() {
                     unsafe {
-                        i.utf8_to_raw(&mut new);
+                        i.char().utf8_to_raw(&mut new, CharStyle::NONE); // todo: handle CharStyle
                     } // Safety: We checked the encoding and it was utf8
                 }
                 Self::Big(new)
@@ -95,7 +95,7 @@ impl LittleString {
                 let mut new = DisplayString::with_capacity(self.len());
                 for i in self.iter() {
                     unsafe {
-                        i.raw_to_utf8(&mut new);
+                        i.char().raw_to_utf8(&mut new, CharStyle::NONE); // todo: handle CharStyle
                     } // Safety: We checked the encoding and it was utf8
                 }
                 Self::Big(new)
@@ -108,13 +108,13 @@ impl LittleString {
         if len > N_MAX_LITTLE {
             let mut s = DisplayString::with_capacity(len);
             for _ in 0..len {
-                unsafe { s.push(const { DisplayChar::from_one_cell_utf8_char_unchecked(' ') }) } // Safety: spaces work for all encodings
+                unsafe { s.push(const { CharValue::from_utf8_char(' ').build(CharStyle::NONE) }) } // Safety: spaces work for all encodings
             }
             Self::Big(s)
         } else {
             Self::Little((
                 len as u8,
-                [unsafe { const { DisplayChar::from_one_cell_utf8_char_unchecked(' ') } };
+                [unsafe { const { CharValue::from_utf8_char(' ').build(CharStyle::NONE) } };
                     N_MAX_LITTLE],
             ))
         }
@@ -165,7 +165,7 @@ impl LittleString {
     pub(crate) unsafe fn from_one_cell_utf8_char_unchecked(c: char) -> LittleString {
         let mut data = [unsafe { DisplayChar::zeroed() }; N_MAX_LITTLE];
         unsafe {
-            data[0] = DisplayChar::from_one_cell_utf8_char_unchecked(c);
+            data[0] = CharValue::from_utf8_char(c).build(CharStyle::NONE);
         } // Safety: The caller
         LittleString::Little((1, data))
     }

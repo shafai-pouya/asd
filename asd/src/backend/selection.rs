@@ -77,13 +77,13 @@ impl Selection {
 
     pub(crate) fn validate_wide_chars(&mut self, content: &Content) {
         if let Some(ch) = content[self.line].get(self.col) {
-            self.col -= ch.get_idx_diff_to_reach_start()
+            self.col -= ch.char().get_idx_diff_to_reach_start()
         }
     }
 
     pub(crate) fn validate_wide_chars_forwards(&mut self, content: &Content) {
         while let Some(ch) = content[self.line].get(self.col) {
-            if ch.get_idx_diff_to_reach_start() == 0 {
+            if ch.char().get_idx_diff_to_reach_start() == 0 {
                 break;
             }
             self.col += 1;

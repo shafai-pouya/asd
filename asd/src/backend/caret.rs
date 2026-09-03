@@ -44,7 +44,6 @@ impl<'a> CursorEditor<'a> {
     }
 }
 
-
 pub struct Carets {
     pub carets: MostlyOneVec<Caret>,
 }
@@ -176,17 +175,26 @@ impl Display for Carets {
     }
 }
 
-
 pub struct Caret {
     position: Position,
     pub added_len: usize,
     pub removed_text: MostlyOneVec<LittleString>,
+    #[cfg(debug_assertions)]
+    pub started: bool,
 }
 
 impl Caret {
+    #[cfg(debug_assertions)]
     pub(crate) fn start_checkpoint(&mut self) {
-        debug_assert_eq!(self.added_len, 0);
-        debug_assert_eq!(self.removed_text.len(), 0);
+        if !self.started {
+            self.started = true;
+            assert_eq!(self.added_len, 0);
+            assert_eq!(self.removed_text.len(), 0);
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    pub(crate) fn start_checkpoint(&mut self) {
+        // Nothing
     }
     pub fn sync_selection_with_cursor(&mut self) {
         if self.position.selection.is_none() {
@@ -314,6 +322,7 @@ impl Caret {
     pub(crate) fn cursor_ctrl_home(&mut self) {
         self.position.cursor.ctrl_home()
     }
+    #[cfg(not(debug_assertions))]
     pub(crate) fn new() -> Self {
         Self {
             position: Position::new(Cursor::new(0, 0), Selection::empty()),
@@ -321,13 +330,33 @@ impl Caret {
             removed_text: movec!(),
         }
     }
+    #[cfg(debug_assertions)]
+    pub(crate) fn new() -> Self {
+        Self {
+            position: Position::new(Cursor::new(0, 0), Selection::empty()),
+            added_len: 0,
+            removed_text: movec!(),
+            started: false,
+        }
+    }
 
+    #[cfg(not(debug_assertions))]
     #[inline]
     pub(crate) fn new_from(pos: Position) -> Self {
         Self {
             position: pos,
             added_len: 0,
             removed_text: movec!(),
+        }
+    }
+    #[cfg(debug_assertions)]
+    #[inline]
+    pub(crate) fn new_from(pos: Position) -> Self {
+        Self {
+            position: pos,
+            added_len: 0,
+            removed_text: movec!(),
+            started: false,
         }
     }
 }
@@ -349,7 +378,6 @@ impl PartialEq for Caret {
         self.position.eq(&other.position)
     }
 }
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct Position {

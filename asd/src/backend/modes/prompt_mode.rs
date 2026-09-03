@@ -3,6 +3,7 @@ use crate::assets::colors::{
     C_LOG_INFO, C_LOG_TODO,
 };
 use crate::backend::buffers::BuffersLock;
+use crate::backend::display_char::CharStyle;
 use crate::backend::display_string::DisplayString;
 use crate::backend::encoding::{Encoding, LineEnding};
 use crate::backend::event_handler::EventHandler;
@@ -173,7 +174,7 @@ impl SaveAsMode {
                                     let max = sel.max(data.cursor);
                                     app.internal_clipboard = (Encoding::UTF8(LineEnding::Crlf), movec![movec![
                                         LittleString::Big(DisplayString::from_str(
-                                            &data.filepath[min as usize..max as usize]
+                                            &data.filepath[min as usize..max as usize], CharStyle::NONE,
                                         ))
                                     ]]);
                                 }
@@ -218,7 +219,7 @@ impl SaveAsMode {
                                     data.cursor = min;
                                     app.internal_clipboard = (Encoding::UTF8(LineEnding::Crlf), movec![movec![
                                         LittleString::Big(DisplayString::from_str(
-                                            &data.filepath[min as usize..max as usize]
+                                            &data.filepath[min as usize..max as usize], CharStyle::NONE,
                                         ))
                                     ]]);
                                     data.filepath.drain(min as usize..max as usize);

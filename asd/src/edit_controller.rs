@@ -4,7 +4,7 @@ use crate::backend::caret::{Caret, CursorEditor, Position};
 use crate::backend::checkpoint::Checkpoints;
 use crate::backend::content::whitespaces_in_the_start_of_the_line;
 use crate::backend::cursor::Cursor;
-use crate::backend::display_char::DisplayChar;
+use crate::backend::display_char::{CharStyle, CharValue};
 use crate::backend::display_string::DisplayString;
 use crate::backend::encoding::Encoding;
 use crate::backend::little_string::{LittleString, LittleStringUni};
@@ -63,10 +63,7 @@ impl EditController for Buffer {
                             .get_min();
                         if min.1 == 0 {
                             let mut s = DisplayString::empty();
-                            DisplayChar::from_utf8_grapheme_to_dstring(
-                                ch.encode_utf8(&mut [0; 4]),
-                                &mut s,
-                            );
+                            s.push(CharValue::from_utf8_char(ch).build(CharStyle::NONE));
                             LittleString::Big(s)
                         } else {
                             struct S(String);
@@ -82,6 +79,7 @@ impl EditController for Buffer {
                             }
                             let mut s = S(String::new());
                             self.content[min.0][min.1 - 1]
+                                .char()
                                 .utf8__write_to(&mut s)
                                 .unwrap();
                             s.0.push(ch);
@@ -92,7 +90,7 @@ impl EditController for Buffer {
                             } else {
                                 let lsu = LittleStringUni::new(&s.0);
                                 let mut ls = LittleString::empty();
-                                ls.push(DisplayChar::from_lsu(lsu));
+                                ls.push(CharValue::from_lsu(lsu).build(CharStyle::NONE));
                                 cursor_editor.cursors.carets[cursor_editor.cursor]
                                     .get_position_mut_unchecked()
                                     .set_min((min.0, min.1 - 1));
@@ -100,7 +98,10 @@ impl EditController for Buffer {
                             }
                         }
                     }
-                    Encoding::Raw => LittleString::from_raw(ch.encode_utf8(&mut [0; 4]).as_bytes()),
+                    Encoding::Raw => LittleString::from_raw(
+                        ch.encode_utf8(&mut [0; 4]).as_bytes(),
+                        CharStyle::NONE,
+                    ),
                 };
                 self.content
                     .replace_text(&mut self.checkpoints, &mut cursor_editor, movec!(ls))
@@ -532,11 +533,11 @@ impl EditController for Buffer {
 
         let (line, mut start_col) = Cursor::clamp_position(x, y, &self.content);
 
-        let current_char = self.content[line]
+        let current_char_is_var_name = self.content[line]
             .get(start_col)
-            .copied()
-            .unwrap_or(unsafe { const { DisplayChar::from_one_cell_utf8_char_unchecked('_') } });
-        if !current_char.is_variable_name() {
+            .map(|c| c.char().is_variable_name())
+            .unwrap_or(true);
+        if !current_char_is_var_name {
             return;
         }
 
@@ -544,7 +545,7 @@ impl EditController for Buffer {
 
         while start_col != 0 {
             let char = self.content[line][start_col - 1]; // start col is valid, non-zero, and we're using the prev char of it. So, unwrap is ok
-            if char.is_variable_name() {
+            if char.char().is_variable_name() {
                 start_col -= 1;
             } else {
                 break;
@@ -554,7 +555,7 @@ impl EditController for Buffer {
         let line_len = self.content[line].len();
         while end_col < line_len {
             let char = self.content[line][end_col]; // end_col is less than line_len, so unwrap is ok
-            if char.is_variable_name() {
+            if char.char().is_variable_name() {
                 end_col += 1;
             } else {
                 break;

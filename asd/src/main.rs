@@ -242,7 +242,7 @@ fn main() {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open("/dev/pts/36")
+            .open("/dev/pts/3")
             .unwrap();
 
         libc::dup2(file.as_raw_fd(), 0); // stdin

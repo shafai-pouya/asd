@@ -183,7 +183,7 @@ impl EditorMode {
                                 (true, Arrow::End) => caret.cursor_ctrl_end(&active_buffer.content),
                                 (true, Arrow::Home) => caret.cursor_ctrl_home(),
                             }
-                            
+
                             caret.merge_sel_pos();
                         }
                         active_buffer.operate_arrow_end(app.last_content_rect);

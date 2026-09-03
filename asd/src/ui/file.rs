@@ -6,7 +6,6 @@ use crate::assets::colors::{
 use crate::backend::buffers::BuffersRenderGuard;
 use crate::backend::caret::Carets;
 use crate::backend::content::Content;
-use crate::backend::display_string::DisplaySlice;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::custom_scrollbar::CustomScrollbar;
 use crate::ui::scrollbar::render_scrollbar;
@@ -15,7 +14,7 @@ use ratatui::layout::Alignment;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Paragraph, Widget};
+use ratatui::widgets::{Block, Widget};
 use std::cmp::Ordering;
 
 pub(crate) fn render_file(
@@ -43,47 +42,44 @@ pub(crate) fn render_file(
 
     let mut emoji_queue = vec![];
 
-    Paragraph::new(
-        active_buffer
-            .content
-            .get(
-                active_buffer.scrollbar.top_position
-                    ..(active_buffer.scrollbar.top_position + content_area.height as usize)
-                        .min(active_buffer.content.len()),
-            )
-            .unwrap_or(&[])
-            .iter()
+    for (y, line_n) in (active_buffer.scrollbar.top_position
+        ..(active_buffer.scrollbar.top_position + content_area.height as usize))
+        .enumerate()
+    {
+        let Some(line) = active_buffer.content.get(line_n) else {
+            break;
+        };
+        let mut second_color = false;
+        for (char_idx, x) in (active_buffer.scrollbar.position as usize
+            ..((active_buffer.scrollbar.position + content_area.width) as usize))
             .enumerate()
-            .map(|(y, a)| {
-                Line::raw(
-                    a.get(
-                        active_buffer.scrollbar.position as usize
-                            ..((active_buffer.scrollbar.position + content_area.width) as usize)
-                                .min(a.len()),
-                    )
-                    .map(|a| {
-                        DisplaySlice::from_slice(a).to_string_to_show(
-                            content_area.x,
-                            y as u16,
-                            buf,
-                            &mut emoji_queue,
-                        )
-                    })
-                    .unwrap_or(String::new()),
-                )
-            })
-            .collect::<Vec<_>>(),
-    )
-    .render(content_area, buf);
+        {
+            let Some(char) = line.get(char_idx) else {
+                break;
+            };
+            char.render(
+                &mut emoji_queue,
+                &mut second_color,
+                x as u16 + content_area.x,
+                y as u16 + content_area.y,
+                char_idx as u16 == (content_area.width - 1),
+                buf,
+            );
+        }
+    }
 
-    Paragraph::new(
-        (active_buffer.scrollbar.top_position + 1
-            ..(active_buffer.scrollbar.top_position + content_area.height as usize + 1)
-                .min(active_buffer.content.len() + 1))
-            .map(|n| Line::raw(format!("{} ", n)).alignment(Alignment::Right))
-            .collect::<Vec<_>>(),
-    )
-    .render(lines_area, buf);
+    for (y, n) in (active_buffer.scrollbar.top_position + 1
+        ..(active_buffer.scrollbar.top_position + content_area.height as usize + 1)
+            .min(active_buffer.content.len() + 1))
+        .enumerate()
+    {
+        Line::raw(format!("{} ", n))
+            .alignment(Alignment::Right)
+            .render(
+                Rect::new(lines_area.x, lines_area.y + y as u16, lines_area.width, 1),
+                buf,
+            );
+    }
 
     render_scrollbar(file_scroll_area, content_area, buf, active_buffer);
 

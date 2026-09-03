@@ -5,14 +5,15 @@ use crate::backend::cursor::Cursor;
 use crate::backend::display_string::{DisplaySlice, DisplayString};
 use crate::backend::little_string::LittleString;
 use crate::backend::mostly_one_vec::MostlyOneVec;
-use std::ops::{Index, Range};
-use std::time::Instant;
 use crate::backend::selection::Selection;
+use std::ops::Index;
+use std::slice::SliceIndex;
+use std::time::Instant;
 
 pub(crate) fn whitespaces_in_the_start_of_the_line(s: &DisplayString) -> &DisplaySlice {
     let mut idx = 0;
     for c in s.iter() {
-        if !c.is_whitespace() {
+        if !c.char().is_whitespace() {
             break;
         }
         idx += 1;
@@ -44,7 +45,10 @@ impl Content {
     }
 
     #[inline]
-    pub(crate) fn get(&self, i: Range<usize>) -> Option<&[DisplayString]> {
+    pub(crate) fn get<I>(&self, i: I) -> Option<&I::Output>
+    where
+        I: SliceIndex<[DisplayString]>,
+    {
         self.lines.get(i)
     }
     #[inline]
@@ -72,8 +76,8 @@ impl Content {
 
         // Do checkpoints:
         caret_ptr.start_checkpoint();
-        let forward = caret_ptr.get_position().selection.get_lc()
-            > caret_ptr.get_position().cursor.get_lc();
+        let forward =
+            caret_ptr.get_position().selection.get_lc() > caret_ptr.get_position().cursor.get_lc();
         let mut skip = if !forward { caret_ptr.added_len } else { 0 };
         if caret_ptr.removed_text.is_empty() {
             caret_ptr.removed_text.push(LittleString::empty());
@@ -218,7 +222,10 @@ impl Content {
 
         unsafe {
             if !caret_ptr.get_position().is_selection_none() {
-                caret_ptr.set_position_unchecked(Position::new(Cursor::new(max.0, max.1), Selection::empty()));
+                caret_ptr.set_position_unchecked(Position::new(
+                    Cursor::new(max.0, max.1),
+                    Selection::empty(),
+                ));
             }
         }
 

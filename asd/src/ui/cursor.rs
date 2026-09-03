@@ -58,10 +58,10 @@ impl TerminalCursor {
     }
 
     pub(crate) fn render_emoji_queue(&mut self, emoji_queue: Vec<(u16, u16, u32)>) {
+        let lock = EMOJI_LIST.lock().unwrap();
         for (x, y, emoji) in emoji_queue {
             execute!(io::stdout(), MoveTo(x, y),).unwrap(); // todo: I don't think it will fail. Maybe: remove unwrap
-            let lock = EMOJI_LIST.lock().unwrap();
-            let str: &str = lock.get(emoji as usize & 0x3FFF_FFFF).unwrap();
+            let str: &str = lock.get(emoji as usize - 0x11_0000).unwrap();
             print!("{}", str);
         }
     }

@@ -1,11 +1,17 @@
+use crate::assets::colors::{
+    C_BG_SPECIAL_BYTES, apply_base_style, apply_deprecated_state, apply_diagnostic_style,
+};
 use crate::backend::display_string::DisplayString;
 use crate::backend::little_string::LittleStringUni;
 use once_cell::sync::Lazy;
-use rand::{RngExt, rng};
+use ratatui::buffer::{Cell, CellDiffOption};
+use ratatui::prelude::Modifier;
+use ratatui::style::Style;
+use std::cmp::Ordering;
 use std::io::{Error, Write};
 use std::sync::Mutex;
 
-pub static NORMAL_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
+pub static LONG_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
 pub static EMOJI_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 const fn pad4(s: &str) -> [u8; 4] {
@@ -107,12 +113,475 @@ pub const LOOKUP_SPECIAL: [u8; 260] = strings_to_bytes!(
     "APC",  // 0x9F - APC - 01000000
 );
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::enum_variant_names)]
-pub(crate) enum ColoringState {
-    NoColor,
-    NewColor,
-    PrevColor,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum BaseStyle {
+    NonStyled = 0,
+    Comment,
+    DocComment,
+    ConstantOrField,
+    FunctionOrOverloadOperators,
+    Number,
+    String,
+    KeywordOrStringEscape,
+    Attribute,
+    Macro,
+    LabelOrLifeTime,
+    Self_,
+    TypeParameter,
+    Type,
+    EnumVariant,
+    Trait,
+    UnsafeCall,
+    QuestionMark,
+    Todo,
+    Unused,
+    ConditionallyDisabled,
+    LspHint,
+    LspLens,
+    Autocompletion,
+}
+
+impl From<CharStyle> for BaseStyle {
+    fn from(value: CharStyle) -> Self {
+        unsafe { std::mem::transmute((value.0 >> 26) as u8) }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DiagnosticStyle {
+    None = 0,
+    Error,
+    UnknownSymbol,
+    RuntimeProblem,
+    Warning,
+    Typo,
+}
+
+impl From<CharStyle> for DiagnosticStyle {
+    fn from(value: CharStyle) -> Self {
+        unsafe { std::mem::transmute(((value.0 >> 22) & 0b111) as u8) }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeprecatedState(pub bool);
+
+impl From<CharStyle> for DeprecatedState {
+    fn from(d: CharStyle) -> Self {
+        Self((d.0 & 0x0020_0000) != 0)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct CharStyle(u32);
+
+impl CharStyle {
+    pub const NONE: CharStyle = CharStyle(0);
+    pub fn new(
+        base_style: BaseStyle,
+        diagnostic_style: DiagnosticStyle,
+        deprecated_state: DeprecatedState,
+    ) -> Self {
+        let base_style = base_style as u32;
+        let diagnostic_style = diagnostic_style as u32;
+        let deprecated_state = deprecated_state.0;
+
+        debug_assert!(base_style < 64);
+        debug_assert!(diagnostic_style < 16);
+
+        let base_mask = base_style << 26;
+        let diagnostic_mask = diagnostic_style << 22;
+        let deprecated_mask = if deprecated_state { 0x0020_0000 } else { 0 };
+
+        Self(base_mask | diagnostic_mask | deprecated_mask)
+    }
+
+    pub fn render_style(self, is_special: bool, second_color: &mut bool, cell: &mut Cell) {
+        if is_special {
+            let color = C_BG_SPECIAL_BYTES[*second_color as usize];
+            *second_color = !*second_color;
+            cell.set_style(
+                Style::new()
+                    .add_modifier(Modifier::DOUBLE_UNDERLINED)
+                    .bg(color),
+            );
+        }
+        cell.set_style(apply_base_style(self.into()));
+        cell.set_style(apply_diagnostic_style(self.into()));
+        cell.set_style(apply_deprecated_state(self.into()));
+    }
+}
+
+impl From<DisplayChar> for CharStyle {
+    fn from(value: DisplayChar) -> Self {
+        Self(value.0 & 0xFFE0_0000)
+    }
+}
+
+/// [0x0000_0000, 0x0000_D777] => char
+/// [0x0000_D800, 0x0000_DFFF] => special value
+/// [0x0000_E000, 0x0010_FFFF] => char
+/// [0x0011_0000, 0x0013_FFFF) => emojis
+/// 0x0013_FFFF                => emoji last
+/// [0x0014_0000, 0x001F_FFFF] => long
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct CharValue(u32);
+
+impl CharValue {
+    pub const EMOJI_LAST: Self = Self(0x0013_FFFF);
+    pub const LOSSY: Self = Self('�' as u32);
+
+    pub(crate) fn is_whitespace(&self) -> bool {
+        if let Some(c) = char::from_u32(self.0) {
+            c.is_whitespace()
+        } else {
+            // long:
+            // emoji:
+            // emoji last:
+            // special:
+            false
+        }
+    }
+
+    pub(crate) fn char_start_offset(self) -> usize {
+        // char:          0
+        // emoji          0
+        // emoji last     1
+        // long           0
+        // special        self.0 & 3
+
+        if (self.0 & 0xFFFF_F800) == 0x0000_D800 {
+            self.0 as usize & 3
+        } else {
+            (self.0 == 0x0013_FFFF) as usize
+        }
+    }
+
+    pub(crate) fn is_variable_name(self) -> bool {
+        // char:         alphanum or '_'
+        // emoji:        false
+        // emoji last:   false
+        // long:         is_var_name
+        // special:      false
+        if let Ok(c) = char::try_from(self.0) {
+            c.is_alphanumeric() || c == '_'
+        } else if let index = self.0.wrapping_sub(0x0014_0000)
+            && index <= 0x000B_FFFF
+        {
+            let list_lock = LONG_LIST.lock().unwrap();
+            list_lock[index as usize].is_variable_name()
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn from_utf8_grapheme_to_dstring(
+        grapheme: &str,
+        string: &mut DisplayString,
+        style: CharStyle,
+    ) {
+        // char:         convert
+        // emoji:        emoji + emoji last
+        // long:         long
+        // special:      lookup table
+        if emojis::get(grapheme).is_some() {
+            Self::from_emoji(grapheme, string);
+        } else if grapheme.len() == 1 {
+            Self::from_u8(grapheme.as_bytes()[0] as u32, string, style);
+        } else if grapheme.chars().count() == 1 {
+            unsafe {
+                string.push(Self(grapheme.chars().next().unwrap() as u32).build(style));
+            }
+        } else {
+            unsafe { string.push(Self::from_lsu(LittleStringUni::new(grapheme)).build(style)) }
+        }
+    }
+
+    fn from_emoji(grapheme: &str, string: &mut DisplayString) {
+        let mut lock = EMOJI_LIST.lock().unwrap();
+        if lock.len() >= 0x2F_FFFF {
+            emoji_list_is_full()
+        }
+        let idx = lock.len() as u32 + 0x11_0000;
+        lock.push(LittleStringUni::new(grapheme)); // todo: I know it leaks memory. I may fix it later...
+        unsafe {
+            string.push(Self(idx).emoji_to_dchar());
+            string.push(Self::EMOJI_LAST.emoji_to_dchar());
+        }
+    }
+
+    const fn emoji_to_dchar(self) -> DisplayChar {
+        debug_assert!(0x0011_0000 <= self.0);
+        debug_assert!(0x0013_FFFF >= self.0);
+        DisplayChar(self.0)
+    }
+
+    pub const fn build(self, style: CharStyle) -> DisplayChar {
+        debug_assert!(self.0 & 0xFFE0_0000 == 0);
+        debug_assert!(style.0 & 0x001F_FFFF == 0);
+        DisplayChar(self.0 | style.0)
+    }
+
+    pub(crate) fn from_u8(c: u32, string: &mut DisplayString, style: CharStyle) {
+        unsafe {
+            if c < 0x20 {
+                Self::from_lookup_idx(c, string, style);
+            } else if (0x7F..0xA0).contains(&c) {
+                let idx = c - const { 0x7f - 0b00100000 };
+                Self::from_lookup_idx(idx, string, style);
+            } else {
+                string.push(Self(c).build(style))
+            }
+        }
+    }
+
+    pub fn from_lsu(lsu: LittleStringUni) -> Self {
+        let mut list_lock = LONG_LIST.lock().unwrap();
+        let idx = list_lock.len() as u32;
+        if idx < 0x000B_FFFF {
+            long_list_is_full()
+        }
+        list_lock.push(lsu); // todo: I know it leaks memory. I may fix it later...
+        let idx = idx + 0x0014_0000;
+        Self(idx)
+    }
+
+    /// Safety: Make sure the encoding is correct, and you give it the correct [idx/4]
+    pub(crate) unsafe fn from_lookup_idx(
+        idx_div_4: u32,
+        string: &mut DisplayString,
+        style: CharStyle,
+    ) {
+        let in_list_idx = idx_div_4 * 4;
+        let mut in_list_sym_idx = in_list_idx;
+        while in_list_sym_idx < in_list_idx + 4 {
+            if LOOKUP_SPECIAL[in_list_sym_idx as usize] == 0 {
+                break;
+            }
+            unsafe {
+                string.push(Self(0x0000_D800 + in_list_sym_idx).build(style));
+            } // Safety: The caller
+            in_list_sym_idx += 1;
+        }
+    }
+
+    /// Safety: Make sure it is utf8
+    #[allow(nonstandard_style)]
+    pub(crate) unsafe fn utf8__write_to<F: Write>(self, file: &mut F) -> Result<(), Error> {
+        // char:             c.encode_utf8
+        // special:          write
+        // peek from list:   just push_str as bytes
+        // emoji from list:  just push_str as bytes
+        // emoji second:     DO NOTHING
+
+        if self.0 < 0x11_0000 {
+            if let Some(c) = char::from_u32(self.0) {
+                file.write_all(c.encode_utf8(&mut [0; 4]).as_bytes())
+            } else if self.0 & 3 != 0 {
+                // Nothing to do
+                Ok(())
+            } else if self.0 < const { 0xD800 + (0x20 * 4) } {
+                let idx = self.0 - const { 0xD800 };
+                let ch = idx / 4;
+                file.write_all(&[ch as u8])
+            } else {
+                // if self.0 < const { 0xD800 + (65 * 4) } {
+                let idx = self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 };
+                let ch = idx / 4;
+                file.write_all(&[ch as u8])
+            }
+        } else {
+            match self.0.cmp(&0x13_FFFF) {
+                Ordering::Less => {
+                    let emoji_lock = EMOJI_LIST.lock().unwrap();
+                    file.write_all(emoji_lock[self.0 as usize - 0x11_0000].as_bytes())
+                }
+                Ordering::Equal => {
+                    // Emoji last: Do nothing
+                    Ok(())
+                }
+                Ordering::Greater => {
+                    let long_lock = LONG_LIST.lock().unwrap();
+                    file.write_all(long_lock[self.0 as usize - 0x14_0000].as_bytes())
+                }
+            }
+        }
+    }
+
+    /// Safety: Make sure it is raw
+    #[allow(nonstandard_style)]
+    pub(crate) unsafe fn raw__write_to<F: Write>(self, file: &mut F) -> Result<(), Error> {
+        // byte:             byte
+        // special:          peek from the special list
+        // peek from list:   PANIC
+        // emoji from list:  PANIC
+        // emoji second:     PANIC
+
+        if self.0 < 0x100 {
+            file.write_all(&[self.0 as u8])?;
+        } else if self.0 & 3 != 0 {
+            // Nothing to do
+        } else if self.0 < 0xD800 {
+            unreachable!(
+                "raw buffer contains non-raw chars. It should not happen. You called \
+            raw__write_to function on a non-raw buffer, or a bug happened"
+            )
+        } else if self.0 < const { 0xD800 + (0x20 * 4) } {
+            let idx = self.0 - const { 0xD800 };
+            let ch = idx / 4;
+            file.write_all(&[ch as u8])?;
+        } else if self.0 < const { 0xD800 + (65 * 4) } {
+            let idx = self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 };
+            let ch = idx / 4;
+            file.write_all(&[ch as u8])?;
+        } else {
+            unreachable!(
+                "raw buffer contains non-raw chars. It should not happen. You called \
+            raw__write_to function on a non-raw buffer, or a bug happened"
+            )
+        }
+
+        Ok(())
+    }
+
+    /// Safety: Make sure the encoding is utf8
+    pub(crate) unsafe fn utf8_to_raw(self, string: &mut DisplayString, style: CharStyle) {
+        // char:         Self::from_char...(c.encode_chars as bytes)
+        // special:      self
+        // long:         for each char, do step 1
+        // emoji:        for each char, do step 1
+        // emoji last:   DO NOTHING
+
+        if let Ok(c) = char::try_from(self.0) {
+            Self::char_to_raw(c, string, style);
+        } else if self.0 < 0x11_0000 {
+            unsafe { string.push(self.build(style)) }
+        } else if self.0 < 0x13_FFFF {
+            let index = self.0 as usize - 0x11_0000;
+            let list_lock = EMOJI_LIST.lock().unwrap();
+            for c in list_lock[index].chars() {
+                Self::char_to_raw(c, string, style);
+            }
+        } else if self.0 == 0x13_FFFF {
+            // Do nothing
+        } else {
+            let index = self.0 as usize - 0x14_0000;
+            let list_lock = LONG_LIST.lock().unwrap();
+            for c in list_lock[index].chars() {
+                Self::char_to_raw(c, string, style);
+            }
+        }
+    }
+
+    /// Safety: Make sure the encoding is raw
+    pub(crate) unsafe fn raw_to_utf8(self, file: &mut DisplayString, style: CharStyle) {
+        // char:             char
+        // special:          peek from the special list
+        // peek from list:   PANIC
+        // emoji from list:  PANIC
+        // emoji second:     PANIC
+
+        // So, the raw buffer can cast into an utf8 buffer without any problems
+        unsafe {
+            if self.0 & 0xFFFF_F800 == 0x0000_D800 {
+                file.push(CharValue::LOSSY.build(style));
+            } else {
+                file.push(self.build(style));
+            }
+        } // Safety: The caller
+    }
+
+    fn char_to_raw(ch: char, string: &mut DisplayString, style: CharStyle) {
+        for &b in ch.encode_utf8(&mut [0; 4]).as_bytes() {
+            CharValue::from_u8(b as u32, string, style)
+        }
+    }
+
+    /// Safety: It should be one cell utf8 char
+    #[inline]
+    pub(crate) const unsafe fn from_utf8_char(c: char) -> Self {
+        Self(c as u32)
+    }
+    pub(crate) fn get_idx_diff_to_reach_start(self) -> usize {
+        // char:          0
+        // 0xAD:          0
+        // emoji          0
+        // emoji last     1
+        // long           0
+        // special        self.0 & 3
+
+        if (self.0 & 0xFFFF_F800) == 0x0000_D800 {
+            self.0 as usize & 3
+        } else {
+            (self.0 == Self::EMOJI_LAST.0) as usize
+        }
+    }
+
+    pub fn render_cell_content(
+        self,
+        cell: &mut Cell,
+        last: bool,
+        emojis_to_render: &mut Vec<(u16, u16, u32)>,
+        x: u16,
+        y: u16,
+    ) {
+        // char:        encode bytes
+        // 0xAD:        " "
+        // emoji:       emoji queue (if not last) + "..."
+        // emoji last:  "..."
+        // long:        render
+        // special:     from lookup table
+        if self.0 == 0xAD {
+            cell.set_symbol(" ");
+        } else if let Some(ch) = char::from_u32(self.0) {
+            cell.set_symbol(ch.encode_utf8(&mut [0; 4]));
+        } else if self.0 < 0x11_0000 {
+            cell.set_symbol(
+                char::from_u32(LOOKUP_SPECIAL[self.0 as usize & 0x1FF] as u32)
+                    .unwrap()
+                    .encode_utf8(&mut [0; 4]),
+            );
+        } else if self.0 >= 0x14_0000 {
+            let list_lock = LONG_LIST.lock().unwrap();
+            cell.set_symbol(&list_lock[self.0 as usize - 0x14_0000]);
+        } else {
+            cell.set_symbol("…");
+            cell.set_diff_option(CellDiffOption::AlwaysUpdate);
+            if !last && self.0 != Self::EMOJI_LAST.0 {
+                emojis_to_render.push((x, y, self.0))
+            }
+        }
+    }
+
+    pub fn is_special(self) -> bool {
+        self.0 & 0xFFFF_F800 == 0x0000_D800
+    }
+}
+
+#[cold]
+fn emoji_list_is_full() -> ! {
+    panic!("emoji list is full");
+}
+
+#[cold]
+fn long_list_is_full() -> ! {
+    panic!("long list is full");
+}
+
+impl From<DisplayChar> for CharValue {
+    fn from(value: DisplayChar) -> Self {
+        Self(value.0 & 0x001F_FFFF)
+    }
+}
+
+impl PartialEq<char> for CharValue {
+    fn eq(&self, other: &char) -> bool {
+        (*other as u32) == self.0
+    }
 }
 
 /// Ranges:
@@ -145,335 +614,171 @@ pub(crate) enum ColoringState {
 #[derive(Clone, Copy)]
 pub struct DisplayChar(u32);
 
-// impl DisplayChar {
-//     pub(crate) fn null1() -> DisplayChar { // todo: temporary function
-//         Self(0x0000_D800)
-//     }
-//     pub(crate) fn null2() -> DisplayChar { // todo: temporary function
-//         Self(0x0000_D801)
-//     }
-//     pub(crate) fn null3() -> DisplayChar { // todo: temporary function
-//         Self(0x0000_D802)
-//     }
-// }
-
 impl DisplayChar {
-    pub(crate) fn from_utf8_grapheme_to_dstring(grapheme: &str, string: &mut DisplayString) {
-        if emojis::get(grapheme).is_some() {
-            let mut lock = EMOJI_LIST.lock().unwrap();
-            let idx = lock.len() as u32;
-            let idx = idx | 0x4000_0000;
-            lock.push(LittleStringUni::new(grapheme));
-            unsafe {
-                string.push(Self(idx));
-                string.push(Self(0x7FFF_FFFF));
-            }
-        } else if grapheme.chars().count() == 1 {
-            let c = grapheme.chars().next().unwrap() as u32;
-            Self::from_u8_checked(c, string)
-        } else {
-            unsafe { string.push(Self::from_lsu(LittleStringUni::new(grapheme))) }
-        }
+    pub fn char(self) -> CharValue {
+        self.into()
     }
 
-    pub(crate) fn from_lsu(lsu: LittleStringUni) -> Self {
-        let mut list_lock = NORMAL_LIST.lock().unwrap();
-        let idx = list_lock.len() as u32;
-        list_lock.push(lsu); // todo: I know it has memory leak. I may fix it later...
-        let value = idx | 0x8000_0000u32;
-        Self(value)
+    pub fn style(self) -> CharStyle {
+        self.into()
     }
 
-    /// Safety: Make sure the encoding is correct, and you give it the correct [idx/4]
-    pub(crate) unsafe fn from_lookup_idx(idx_div_4: u32, string: &mut DisplayString) {
-        let in_list_idx = idx_div_4 * 4;
-        let mut in_list_sym_idx = in_list_idx;
-        while in_list_sym_idx < in_list_idx + 4 {
-            if LOOKUP_SPECIAL[in_list_sym_idx as usize] == 0 {
-                break;
-            }
-            unsafe {
-                string.push(Self(0x0000_D800 + in_list_sym_idx));
-            } // Safety: The caller
-            in_list_sym_idx += 1;
-        }
-    }
-
-    pub(crate) fn is_whitespace(&self) -> bool {
-        if let Some(c) = char::from_u32(self.0) {
-            c.is_whitespace()
-        } else {
-            // peek from list:
-            // emojis:
-            // emoji second char:
-            // special:
-            false
-        }
-    }
-
+    //
+    // pub(crate) fn from_lsu(lsu: LittleStringUni) -> Self {
+    //     let mut list_lock = NORMAL_LIST.lock().unwrap();
+    //     let idx = list_lock.len() as u32;
+    //     list_lock.push(lsu); // todo: I know it has memory leak. I may fix it later...
+    //     let value = idx | 0x8000_0000u32;
+    //     Self(value)
+    // }
+    //
     /// This function returns a zero value, which does nothing even on drop
     #[inline]
     pub(crate) unsafe fn zeroed() -> DisplayChar {
         Self(0)
     }
 
-    /// Safety: It should be one cell utf8 char
-    #[inline]
-    pub(crate) const unsafe fn from_one_cell_utf8_char_unchecked(c: char) -> DisplayChar {
-        Self(c as u32)
+    pub fn render(
+        self,
+        emojis_to_render: &mut Vec<(u16, u16, u32)>,
+        second_color: &mut bool,
+        x: u16,
+        y: u16,
+        last: bool,
+        buf: &mut ratatui::buffer::Buffer,
+    ) {
+        self.char().render_cell_content(
+            buf.cell_mut((x, y)).unwrap(),
+            last,
+            emojis_to_render,
+            x,
+            y,
+        );
+        self.style().render_style(
+            self.char().is_special(),
+            second_color,
+            buf.cell_mut((x, y)).unwrap(),
+        );
+
+        // pub(crate) fn to_string_to_show(
+        //     &self,
+        //     start_x: u16,
+        //     start_y: u16,
+        //     buf: &mut Buffer,
+        //     emojis_to_render: &mut Vec<(u16, u16, u32)>,
+        // ) -> String {
+        //     let mut second_color = true;
+        //     let mut string = String::new();
+        //     for (&i, x) in self.gms.iter().zip(start_x..) {
+        //         if i.self_to_string_to_show(
+        //             x == start_x,
+        //             self.len() as u16 - (x - start_x) == 1,
+        //             &mut string,
+        //         ) {
+        //             emojis_to_render.push((x, start_y, i.into()))
+        //         }
+        //         let wide_idx = i.get_coloring_state();
+        //         if wide_idx == ColoringState::NewColor {
+        //             second_color = !second_color;
+        //         }
+        //         if wide_idx != ColoringState::NoColor {
+        //             buf.set_style(
+        //                 Rect {
+        //                     x,
+        //                     y: start_y,
+        //                     width: 1,
+        //                     height: 1,
+        //                 },
+        //                 Style::new().bg(if second_color {
+        //                     C_BG_SPECIAL_BYTE2
+        //                 } else {
+        //                     C_BG_SPECIAL_BYTE1
+        //                 }),
+        //             )
+        //         }
+        //     }
+        //     string
+        // }
     }
 
-    pub(crate) fn from_u8_checked(c: u32, string: &mut DisplayString) {
-        unsafe {
-            if c < 0x20 {
-                Self::from_lookup_idx(c, string);
-            } else if (0x7F..0xA0).contains(&c) {
-                let idx = c - const { 0x7f - 0b00100000 };
-                Self::from_lookup_idx(idx, string);
-            } else {
-                string.push(Self(c))
-            }
-        }
-    }
-
-    pub(crate) fn get_idx_diff_to_reach_start(self) -> usize {
-        // char:            0
-        // 0xAD:            0
-        // emoji first      0
-        // emoji second     1
-        // peek from list   0
-        // special          self.0 & 3
-
-        if (self.0 & 0xFFFF_F800) == 0x0000_D800 {
-            self.0 as usize & 3
-        } else {
-            (self.0 == 0x7FFF_FFFF) as usize
-        }
-    }
-
-    pub(crate) fn get_coloring_state(&self) -> ColoringState {
-        // char low: No
-        // special if self.0 & 3 == 0: New
-        // special if self.0 & 3 != 0: Old
-        // char high: No
-        // emoji index: New
-        // emoji second: Old
-        // peek: No
-
-        if self.0 & 0x8000_0000 != 0 {
-            ColoringState::NoColor
-        } else if self.0 & 0x4000_0000 != 0 {
-            if self.0 == 0x7FFF_FFFF {
-                ColoringState::PrevColor
-            } else {
-                ColoringState::NewColor
-            }
-        // Same as [`std::char::convert::char_try_from_u32`]
-        } else if (self.0 ^ 0xD800).wrapping_sub(0x800) < 0x110000 - 0x800 {
-            ColoringState::NoColor
-        } else if self.0 & 3 == 0 {
-            ColoringState::NewColor
-        } else {
-            ColoringState::PrevColor
-        }
-    }
-
-    pub(crate) fn self_to_string_to_show(self, first: bool, last: bool, s: &mut String) -> bool {
-        // char:            put
-        // 0xAD:            put space
-        // emoji index:     last: three dots, else: random
-        // emoji second     first: three dots, else: random
-        // peek from list   push_str
-        // special          LOOKUP[self.0 & 0x1FF]
-        if self.0 == 0xAD {
-            s.push(' ');
-            false
-        } else if let Some(c) = char::from_u32(self.0) {
-            s.push(c);
-            false
-        } else if self.0 & 0x8000_0000u32 != 0 {
-            let lock = NORMAL_LIST.lock().unwrap();
-            s.push_str(lock[self.0 as usize & 0x7FFF_FFFF].as_ref());
-            false
-        } else if self.0 == 0x7FFF_FFFF {
-            if first {
-                s.push('…');
-                false
-            } else {
-                s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
-                false
-            }
-        } else if self.0 & 0x4000_0000u32 != 0 {
-            if last {
-                s.push('…');
-                false
-            } else {
-                s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
-                true
-            }
-        } else {
-            s.push_str(
-                str::from_utf8(&[LOOKUP_SPECIAL[self.0 as usize & 0b00000001_11111111]]).unwrap(),
-            );
-            false
-        }
-    }
-
-    pub(crate) fn is_variable_name(self) -> bool {
-        if let Ok(c) = char::try_from(self.0) {
-            c.is_alphanumeric() || c == '_'
-        } else if self.0 & 0x8000_0000u32 != 0 {
-            let index = self.0 & 0x7fff_ffffu32;
-            let index = index as usize;
-            let list_lock = NORMAL_LIST.lock().unwrap();
-            list_lock[index].is_variable_name()
-        // I could write these two following lines, but I won't because of the optimizations:
-        // } else if self.0 & 0x4000_0000u32 != 0 {
-        //     false
-        } else {
-            false
-        }
-    }
-
-    /// Safety: Make sure it is utf8
-    #[allow(nonstandard_style)]
-    pub(crate) unsafe fn utf8__write_to<F: Write>(self, file: &mut F) -> Result<(), Error> {
-        // char:             c.encode_utf8
-        // special:          PANIC
-        // peek from list:   just push_str as bytes
-        // emoji from list:  just push_str as bytes
-        // emoji second:     DO NOTHING
-
-        if let Ok(c) = char::try_from(self.0) {
-            file.write_all(c.encode_utf8(&mut [0; 4]).as_bytes())?;
-        } else if self.0 & 0x8000_0000u32 != 0 {
-            let index = self.0 & 0x7fff_ffffu32;
-            let index = index as usize;
-            let list_lock = NORMAL_LIST.lock().unwrap();
-            file.write_all(list_lock[index].as_bytes())?;
-        } else if self.0 == 0x7FFF_FFFF {
-            // Do nothing
-        } else if self.0 & 0x4000_0000u32 != 0 {
-            let index = self.0 & 0x3fff_ffffu32;
-            let index = index as usize;
-            let list_lock = EMOJI_LIST.lock().unwrap();
-            file.write_all(list_lock[index].as_bytes())?;
-        } else if self.0 & 3 != 0 {
-            // Do nothing
-        } else if self.0 < const { 0xD800 + (0x20 * 4) } {
-            let idx = self.0 - const { 0xD800 };
-            let ch = idx / 4;
-            file.write_all(&[ch as u8])?;
-        } else {
-            let idx = self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 };
-            let ch = idx / 4;
-            file.write_all(&[ch as u8])?;
-        }
-        Ok(())
-    }
-
-    /// Safety: Make sure it is raw
-    #[allow(nonstandard_style)]
-    pub(crate) unsafe fn raw__write_to<F: Write>(self, file: &mut F) -> Result<(), Error> {
-        // byte:             byte
-        // special:          peek from the special list
-        // peek from list:   PANIC
-        // emoji from list:  PANIC
-        // emoji second:     PANIC
-
-        if self.0 < 0x100 {
-            file.write_all(&[self.0 as u8])?;
-        } else if self.0 & 3 != 0 {
-            // Nothing to do
-        } else if self.0 < 0xD800 {
-            panic!(
-                "raw buffer contains non-raw chars. It should not happen. You called \
-            raw__write_to function on a non-raw buffer, or a bug happened"
-            )
-        } else if self.0 < const { 0xD800 + (0x20 * 4) } {
-            let idx = self.0 - const { 0xD800 };
-            let ch = idx / 4;
-            file.write_all(&[ch as u8])?;
-        } else if self.0 < const { 0xD800 + (65 * 4) } {
-            let idx = self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 };
-            let ch = idx / 4;
-            file.write_all(&[ch as u8])?;
-        } else {
-            panic!(
-                "raw buffer contains non-raw chars. It should not happen. You called \
-            raw__write_to function on a non-raw buffer, or a bug happened"
-            )
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn char_to_raw(ch: char, string: &mut DisplayString) {
-        for &b in ch.encode_utf8(&mut [0; 4]).as_bytes() {
-            Self::from_u8_checked(b as u32, string)
-        }
-    }
-
-    /// Safety: Make sure the encoding is utf8
-    pub(crate) unsafe fn utf8_to_raw(self, string: &mut DisplayString) {
-        // char:             Self::from_char...(c.encode_chars as bytes)
-        // special:          PANIC
-        // peek from list:   for each char, do step 1
-        // emoji from list:  for each char, do step 1
-        // emoji second:     DO NOTHING
-
-        if let Ok(c) = char::try_from(self.0) {
-            Self::char_to_raw(c, string);
-        } else if self.0 & 0x8000_0000u32 != 0 {
-            let index = self.0 & 0x7fff_ffffu32;
-            let index = index as usize;
-            let list_lock = NORMAL_LIST.lock().unwrap();
-            for c in list_lock[index].chars() {
-                Self::char_to_raw(c, string);
-            }
-        } else if self.0 == 0x7FFF_FFFF {
-            // Do nothing
-        } else if self.0 & 0x4000_0000u32 != 0 {
-            let index = self.0 & 0x3fff_ffffu32;
-            let index = index as usize;
-            let list_lock = EMOJI_LIST.lock().unwrap();
-            for c in list_lock[index].chars() {
-                Self::char_to_raw(c, string);
-            }
-        } else if self.0 & 3 != 0 {
-            // Do nothing
-        } else {
-            panic!(
-                "utf8 buffer contains non-utf8 special chars. It should not happen. You called \
-            utf8__write_to function on a non-utf8 buffer, or a bug happened"
-            )
-        }
-    }
-
-    /// Safety: Make sure the encoding is raw
-    pub(crate) unsafe fn raw_to_utf8(self, file: &mut DisplayString) {
-        // char:             char
-        // special:          peek from the special list
-        // peek from list:   PANIC
-        // emoji from list:  PANIC
-        // emoji second:     PANIC
-
-        // So, the raw buffer can cast into an utf8 buffer without any problems
-        unsafe {
-            file.push(self);
-        } // Safety: The caller
-    }
+    // pub(crate) fn get_coloring_state(&self) -> ColoringState {
+    //     // char low: No
+    //     // special if self.0 & 3 == 0: New
+    //     // special if self.0 & 3 != 0: Old
+    //     // char high: No
+    //     // emoji index: New
+    //     // emoji second: Old
+    //     // peek: No
+    //
+    //     if self.0 & 0x8000_0000 != 0 {
+    //         ColoringState::NoColor
+    //     } else if self.0 & 0x4000_0000 != 0 {
+    //         if self.0 == 0x7FFF_FFFF {
+    //             ColoringState::PrevColor
+    //         } else {
+    //             ColoringState::NewColor
+    //         }
+    //     // Same as [`std::char::convert::char_try_from_u32`]
+    //     } else if (self.0 ^ 0xD800).wrapping_sub(0x800) < 0x110000 - 0x800 {
+    //         ColoringState::NoColor
+    //     } else if self.0 & 3 == 0 {
+    //         ColoringState::NewColor
+    //     } else {
+    //         ColoringState::PrevColor
+    //     }
+    // }
+    //
+    // pub(crate) fn self_to_string_to_show(self, first: bool, last: bool, s: &mut String) -> bool {
+    //     // char:            put
+    //     // 0xAD:            put space
+    //     // emoji index:     last: three dots, else: random
+    //     // emoji second     first: three dots, else: random
+    //     // peek from list   push_str
+    //     // special          LOOKUP[self.0 & 0x1FF]
+    //     if self.0 == 0xAD {
+    //         s.push(' ');
+    //         false
+    //     } else if let Some(c) = char::from_u32(self.0) {
+    //         s.push(c);
+    //         false
+    //     } else if self.0 & 0x8000_0000u32 != 0 {
+    //         let lock = NORMAL_LIST.lock().unwrap();
+    //         s.push_str(lock[self.0 as usize & 0x7FFF_FFFF].as_ref());
+    //         false
+    //     } else if self.0 == 0x7FFF_FFFF {
+    //         if first {
+    //             s.push('…');
+    //             false
+    //         } else {
+    //             s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
+    //             false
+    //         }
+    //     } else if self.0 & 0x4000_0000u32 != 0 {
+    //         if last {
+    //             s.push('…');
+    //             false
+    //         } else {
+    //             s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
+    //             true
+    //         }
+    //     } else {
+    //         s.push_str(
+    //             str::from_utf8(&[LOOKUP_SPECIAL[self.0 as usize & 0b00000001_11111111]]).unwrap(),
+    //         );
+    //         false
+    //     }
+    // }
 }
 
-impl From<DisplayChar> for u32 {
-    fn from(value: DisplayChar) -> Self {
-        value.0
-    }
-}
-
-impl PartialEq<char> for DisplayChar {
-    #[inline]
-    fn eq(&self, other: &char) -> bool {
-        self.0 == *other as u32
-    }
-}
+// impl From<DisplayChar> for u32 {
+//     fn from(value: DisplayChar) -> Self {
+//         value.0
+//     }
+// }
+//
+// impl PartialEq<char> for DisplayChar {
+//     #[inline]
+//     fn eq(&self, other: &char) -> bool {
+//         self.0 == *other as u32
+//     }
+// }

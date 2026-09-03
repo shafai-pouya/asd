@@ -1,6 +1,6 @@
 use crate::assets::colors::{C_LOG_ERROR, C_LOG_INFO, C_LOG_WARNING};
 use crate::backend::content::Content;
-use crate::backend::display_char::DisplayChar;
+use crate::backend::display_char::{CharStyle, CharValue};
 use crate::backend::display_string::DisplayString;
 use crate::ui::log::{LOGS, Log};
 use libc::{W_OK, X_OK, access};
@@ -224,9 +224,15 @@ impl Encoding {
         while let Some(ch) = chars.next() {
             if ch == '\n' {
                 line_ending.get_or_insert(LineEnding::Lf);
-                lines.push(DisplayString::from_str(&std::mem::take(&mut last)));
+                lines.push(DisplayString::from_str(
+                    &std::mem::take(&mut last),
+                    CharStyle::NONE,
+                ));
             } else if ch == '\r' {
-                lines.push(DisplayString::from_str(&std::mem::take(&mut last)));
+                lines.push(DisplayString::from_str(
+                    &std::mem::take(&mut last),
+                    CharStyle::NONE,
+                ));
                 if chars.peek() == Some(&'\n') {
                     chars.next();
                     line_ending.get_or_insert(LineEnding::Crlf);
@@ -237,7 +243,7 @@ impl Encoding {
                 last.push(ch); // It's Ok
             }
         }
-        lines.push(DisplayString::from_str(&last));
+        lines.push(DisplayString::from_str(&last, CharStyle::NONE));
         (
             Encoding::UTF8(line_ending.unwrap_or(LineEnding::Crlf)),
             Content::from_lines(lines),
@@ -256,14 +262,14 @@ impl Encoding {
             }
             let mut iter = buf[..len].iter().peekable();
             while let Some(&b) = iter.next() {
-                DisplayChar::from_u8_checked(b as u32, &mut last);
+                CharValue::from_u8(b as u32, &mut last, CharStyle::NONE);
                 if b == b'\n' {
                     lines.push(std::mem::replace(&mut last, DisplayString::empty()));
                 } else if b == b'\r' {
                     if iter.peek() == Some(&&b'\n') {
                         iter.next();
                         unsafe {
-                            DisplayChar::from_lookup_idx(10, &mut last);
+                            CharValue::from_lookup_idx(10, &mut last, CharStyle::NONE);
                         } // Safety: The encoding is correct, and also the [idx/4] is correct (10)
                     }
                     lines.push(std::mem::replace(&mut last, DisplayString::empty()));
