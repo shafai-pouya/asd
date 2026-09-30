@@ -156,7 +156,7 @@ impl MenuMode {
                 "Open help".into(),
                 "h".into(),
                 Some((KeyCode::Char('h'), KeyModifiers::NONE, |_, _| {
-                    BuffersLock.get_file_change_guard().open_help()
+                    BuffersLock.get_file_change_guard().lock().open_help()
                 })),
             ),
         ];

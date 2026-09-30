@@ -6,7 +6,6 @@ use crate::backend::content::Content;
 use crate::backend::encoding::Encoding;
 use crate::ui::custom_scrollbar::CustomScrollbar;
 use crate::ui::log::{LOGS, Log};
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -16,7 +15,7 @@ pub(crate) struct Buffer {
 
     pub carets: Carets,
     pub scrollbar: CustomScrollbar,
-    pub drag_start_pos: (usize, usize),
+    pub drag_start_pos: (u16, u16),
     pub tab_size: usize,
     pub modified: bool,
 
@@ -30,7 +29,7 @@ impl Buffer {
     pub(crate) fn new_from_file(path: PathBuf) -> Buffer {
         let showing_filename = path
             .file_name()
-            .unwrap_or(OsStr::new(path.as_os_str()))
+            .unwrap_or(path.as_os_str())
             .to_str()
             .unwrap()
             .to_string();
@@ -88,7 +87,7 @@ impl Buffer {
         }
     }
 
-    pub(crate) fn try_quit(&mut self) -> Result<(), ()> {
+    pub(crate) fn try_quit(&self) -> Result<(), ()> {
         if self.modified {
             LOGS.push(Log {
                 message: "Buffer is modified, try save it first".to_string(),
@@ -99,5 +98,28 @@ impl Buffer {
         } else {
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn try_quit() {
+        let mut buffer = Buffer::new_utf8(PathBuf::from("a"), "b".to_string(), "c");
+        assert_eq!(buffer.try_quit(), Ok(()));
+
+        buffer.buffer_modified();
+        assert_eq!(buffer.try_quit(), Err(()));
+    }
+
+    #[test]
+    fn save() {
+        let mut buffer = Buffer::new_utf8(PathBuf::from("a"), "b".to_string(), "c");
+        buffer.buffer_modified();
+
+        buffer.save(Some(&PathBuf::from("/dev/null")));
+        assert_eq!(buffer.try_quit(), Ok(()));
     }
 }

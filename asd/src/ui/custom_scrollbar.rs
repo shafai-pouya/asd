@@ -3,7 +3,7 @@ use crate::backend::content::Content;
 use ratatui::layout::Rect;
 
 pub struct CustomScrollbar {
-    pub position: u16,
+    pub left_position: u16,
     pub top_position: usize,
     pub freeze: bool,
 }
@@ -11,7 +11,7 @@ pub struct CustomScrollbar {
 impl CustomScrollbar {
     pub(crate) fn new() -> Self {
         CustomScrollbar {
-            position: 0,
+            left_position: 0,
             top_position: 0,
             freeze: false,
         }
@@ -26,7 +26,7 @@ impl CustomScrollbar {
         let content_width = content.get_max_line_length() + SCROLLBAR_EMPTY_COLS_PADDING;
         let viewport_width = content_area.width as usize;
         let scrollbar_width = file_scroll_area.width as usize;
-        let visible_start = self.position as usize;
+        let visible_start = self.left_position as usize;
 
         if content_width <= viewport_width {
             (0, scrollbar_width as u16)
@@ -54,13 +54,13 @@ impl CustomScrollbar {
     /// Notes:
     /// - Remove messages
     pub(crate) fn prev(&mut self, i: u16) {
-        self.position = self.position.saturating_sub(i);
+        self.left_position = self.left_position.saturating_sub(i);
     }
 
     /// Notes:
     /// - Remove messages
     pub(crate) fn next(&mut self, i: u16) {
-        self.position += i;
+        self.left_position += i;
     }
 
     /// Notes:
@@ -80,9 +80,9 @@ impl CustomScrollbar {
             as u16)
             .checked_sub(content_area.width)
         {
-            self.position = self.position.min(max_position);
+            self.left_position = self.left_position.min(max_position);
         } else {
-            self.position = 0;
+            self.left_position = 0;
         }
 
         if let Some(max_position) =
@@ -107,12 +107,12 @@ impl CustomScrollbar {
             self.top_position = y - last_content_rect.height as usize + 1;
         }
 
-        if (x as u16) < self.position {
-            self.position = x as u16
+        if (x as u16) < self.left_position {
+            self.left_position = x as u16
         }
 
-        if x as u16 >= (self.position + last_content_rect.width) {
-            self.position = x as u16 - last_content_rect.width + 1;
+        if x as u16 >= (self.left_position + last_content_rect.width) {
+            self.left_position = x as u16 - last_content_rect.width + 1;
         }
     }
 }

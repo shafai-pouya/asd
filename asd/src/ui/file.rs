@@ -50,8 +50,8 @@ pub(crate) fn render_file(
             break;
         };
         let mut second_color = false;
-        for (char_idx, x) in (active_buffer.scrollbar.position as usize
-            ..((active_buffer.scrollbar.position + content_area.width) as usize))
+        for (char_idx, x) in (active_buffer.scrollbar.left_position as usize
+            ..((active_buffer.scrollbar.left_position + content_area.width) as usize))
             .enumerate()
         {
             let Some(char) = line.get(char_idx) else {
@@ -83,8 +83,6 @@ pub(crate) fn render_file(
 
     render_scrollbar(file_scroll_area, content_area, buf, active_buffer);
 
-    active_buffer.carets.merge(); // todo: I think need to delete this
-
     render_cursor(
         &active_buffer.carets,
         &active_buffer.content,
@@ -108,10 +106,10 @@ pub(crate) fn render_cursor(
     can_use_cursor: bool,
 ) {
     let len = cursors.carets.len();
-    if can_use_cursor && len == 1 && cursors.carets[0].get_position().is_selection_none() {
+    if can_use_cursor && len == 1 && cursors.carets[0].get_position().selection.is_none() {
         if let Ok((x, y)) = find_in_viewport_position(
             cursors.carets[0].get_position().cursor.line,
-            cursors.carets[0].get_position().cursor.col,
+            cursors.carets[0].get_position().cursor.col.col,
             content_area,
             scrollbar,
         ) {
@@ -128,7 +126,7 @@ pub(crate) fn render_cursor(
             if pos.selection.is_none() {
                 if let Ok((x, y)) = find_in_viewport_position(
                     pos.cursor.line,
-                    pos.cursor.col,
+                    pos.cursor.col.col,
                     content_area,
                     scrollbar,
                 ) {
@@ -152,7 +150,7 @@ pub(crate) fn render_cursor(
                 let mut end;
                 let cursor = LC {
                     line: pos.cursor.line,
-                    col: pos.cursor.col,
+                    col: pos.cursor.col.col,
                 };
                 let selection = LC {
                     line: pos.selection.line,
@@ -303,7 +301,7 @@ pub(crate) fn find_in_viewport_position(
         return Err((0, 0)); // Not important for us what is it
     }
 
-    let new_cursor_x = col.wrapping_sub(scrollbar.position as usize) as u16;
+    let new_cursor_x = col.wrapping_sub(scrollbar.left_position as usize) as u16;
     if new_cursor_x >= content_area.width {
         return Err((
             if (new_cursor_x as i16) < 0 {

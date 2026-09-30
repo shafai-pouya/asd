@@ -14,6 +14,10 @@ use std::sync::Mutex;
 pub static LONG_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
 pub static EMOJI_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
+#[cfg(test)]
+pub const PAD4: fn(&str) -> [u8; 4] = pad4;
+
+/// This function is used to expand macro `strings_to_bytes`, to make easier generation of variable `LOOKUP_SPECIAL`
 const fn pad4(s: &str) -> [u8; 4] {
     let bytes = s.as_bytes();
     let mut out = [0; 4];
@@ -32,12 +36,7 @@ macro_rules! strings_to_bytes {
     ($($s:literal),* $(,)?) => {
         [
             $(
-                {
-                    const {
-                        assert!($s.len() <= 4);
-                    };
-                    pad4($s)[0]
-                },
+                pad4($s)[0],
                 pad4($s)[1],
                 pad4($s)[2],
                 pad4($s)[3],
@@ -257,7 +256,7 @@ impl CharValue {
         if (self.0 & 0xFFFF_F800) == 0x0000_D800 {
             self.0 as usize & 3
         } else {
-            (self.0 == 0x0013_FFFF) as usize
+            (self.0 == Self::EMOJI_LAST.0) as usize
         }
     }
 
@@ -342,7 +341,7 @@ impl CharValue {
     pub fn from_lsu(lsu: LittleStringUni) -> Self {
         let mut list_lock = LONG_LIST.lock().unwrap();
         let idx = list_lock.len() as u32;
-        if idx < 0x000B_FFFF {
+        if idx > 0x000B_FFFF {
             long_list_is_full()
         }
         list_lock.push(lsu); // todo: I know it leaks memory. I may fix it later...
@@ -485,12 +484,25 @@ impl CharValue {
         // emoji from list:  PANIC
         // emoji second:     PANIC
 
-        // So, the raw buffer can cast into an utf8 buffer without any problems
-        unsafe {
-            if self.0 & 0xFFFF_F800 == 0x0000_D800 {
-                file.push(CharValue::LOSSY.build(style));
+        let ch = if self.0 & 0xFFFF_F800 == 0x0000_D800 {
+            if self.0 & 3 != 0 {
+                return;
+            }
+            let idx = if self.0 < const { 0xD800 + (0x20 * 4) } {
+                self.0 - const { 0xD800 }
             } else {
-                file.push(self.build(style));
+                self.0 - const { 0xD800 + 0x20 * 4 - 0x7f * 4 }
+            };
+            idx / 4
+        } else {
+            self.0
+        };
+
+        unsafe {
+            if ch < 0x80 {
+                Self::from_u8(ch, file, style);
+            } else {
+                file.push(Self::LOSSY.build(style));
             }
         } // Safety: The caller
     }
@@ -501,24 +513,10 @@ impl CharValue {
         }
     }
 
-    /// Safety: It should be one cell utf8 char
+    /// The utf8 char should fit into one cell
     #[inline]
-    pub(crate) const unsafe fn from_utf8_char(c: char) -> Self {
+    pub(crate) const fn from_utf8_char_one_cell(c: char) -> Self {
         Self(c as u32)
-    }
-    pub(crate) fn get_idx_diff_to_reach_start(self) -> usize {
-        // char:          0
-        // 0xAD:          0
-        // emoji          0
-        // emoji last     1
-        // long           0
-        // special        self.0 & 3
-
-        if (self.0 & 0xFFFF_F800) == 0x0000_D800 {
-            self.0 as usize & 3
-        } else {
-            (self.0 == Self::EMOJI_LAST.0) as usize
-        }
     }
 
     pub fn render_cell_content(
@@ -560,6 +558,10 @@ impl CharValue {
     pub fn is_special(self) -> bool {
         self.0 & 0xFFFF_F800 == 0x0000_D800
     }
+
+    pub fn u32(self) -> u32 {
+        self.0
+    }
 }
 
 #[cold]
@@ -584,32 +586,6 @@ impl PartialEq<char> for CharValue {
     }
 }
 
-/// Ranges:
-///  If it's between 0x0000_0000 to 0x0000_D777 => char
-///  If 0x0000_00AD => replace with " "
-///  If it's between 0x0000_D800 to 0x0000_DFFF => special:
-///     0b11011xxi_iiiiiiII
-///         i: index
-///         I: index + nth_of_char
-///  If it's between 0x0000_E000 to 0x0010_FFFF => char
-///  If it's between 0x8000_0000 to 0xFFFF_FFFF => peek from list
-///  If it's between 0x4000_0000 to 0x7FFF_FFFE => emoji from emoji list
-///  If it's between 0x7FFF_FFFF to 0x7FFF_FFFF => emoji second
-///
-/// Emoji:
-///     First char is the index
-///     Second char is 0b11011111_11111111
-/// Emoji strategies:
-///     for index emojis:
-///         if last:
-///             return three dots
-///         else:
-///             return random data
-///     for 0b11011111_11111111:
-///         if first:
-///             return three dots
-///         else:
-///             return random data
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct DisplayChar(u32);
@@ -623,19 +599,14 @@ impl DisplayChar {
         self.into()
     }
 
-    //
-    // pub(crate) fn from_lsu(lsu: LittleStringUni) -> Self {
-    //     let mut list_lock = NORMAL_LIST.lock().unwrap();
-    //     let idx = list_lock.len() as u32;
-    //     list_lock.push(lsu); // todo: I know it has memory leak. I may fix it later...
-    //     let value = idx | 0x8000_0000u32;
-    //     Self(value)
-    // }
-    //
     /// This function returns a zero value, which does nothing even on drop
     #[inline]
     pub(crate) unsafe fn zeroed() -> DisplayChar {
         Self(0)
+    }
+
+    pub fn u32(self) -> u32 {
+        self.0
     }
 
     pub fn render(
@@ -659,126 +630,657 @@ impl DisplayChar {
             second_color,
             buf.cell_mut((x, y)).unwrap(),
         );
-
-        // pub(crate) fn to_string_to_show(
-        //     &self,
-        //     start_x: u16,
-        //     start_y: u16,
-        //     buf: &mut Buffer,
-        //     emojis_to_render: &mut Vec<(u16, u16, u32)>,
-        // ) -> String {
-        //     let mut second_color = true;
-        //     let mut string = String::new();
-        //     for (&i, x) in self.gms.iter().zip(start_x..) {
-        //         if i.self_to_string_to_show(
-        //             x == start_x,
-        //             self.len() as u16 - (x - start_x) == 1,
-        //             &mut string,
-        //         ) {
-        //             emojis_to_render.push((x, start_y, i.into()))
-        //         }
-        //         let wide_idx = i.get_coloring_state();
-        //         if wide_idx == ColoringState::NewColor {
-        //             second_color = !second_color;
-        //         }
-        //         if wide_idx != ColoringState::NoColor {
-        //             buf.set_style(
-        //                 Rect {
-        //                     x,
-        //                     y: start_y,
-        //                     width: 1,
-        //                     height: 1,
-        //                 },
-        //                 Style::new().bg(if second_color {
-        //                     C_BG_SPECIAL_BYTE2
-        //                 } else {
-        //                     C_BG_SPECIAL_BYTE1
-        //                 }),
-        //             )
-        //         }
-        //     }
-        //     string
-        // }
     }
-
-    // pub(crate) fn get_coloring_state(&self) -> ColoringState {
-    //     // char low: No
-    //     // special if self.0 & 3 == 0: New
-    //     // special if self.0 & 3 != 0: Old
-    //     // char high: No
-    //     // emoji index: New
-    //     // emoji second: Old
-    //     // peek: No
-    //
-    //     if self.0 & 0x8000_0000 != 0 {
-    //         ColoringState::NoColor
-    //     } else if self.0 & 0x4000_0000 != 0 {
-    //         if self.0 == 0x7FFF_FFFF {
-    //             ColoringState::PrevColor
-    //         } else {
-    //             ColoringState::NewColor
-    //         }
-    //     // Same as [`std::char::convert::char_try_from_u32`]
-    //     } else if (self.0 ^ 0xD800).wrapping_sub(0x800) < 0x110000 - 0x800 {
-    //         ColoringState::NoColor
-    //     } else if self.0 & 3 == 0 {
-    //         ColoringState::NewColor
-    //     } else {
-    //         ColoringState::PrevColor
-    //     }
-    // }
-    //
-    // pub(crate) fn self_to_string_to_show(self, first: bool, last: bool, s: &mut String) -> bool {
-    //     // char:            put
-    //     // 0xAD:            put space
-    //     // emoji index:     last: three dots, else: random
-    //     // emoji second     first: three dots, else: random
-    //     // peek from list   push_str
-    //     // special          LOOKUP[self.0 & 0x1FF]
-    //     if self.0 == 0xAD {
-    //         s.push(' ');
-    //         false
-    //     } else if let Some(c) = char::from_u32(self.0) {
-    //         s.push(c);
-    //         false
-    //     } else if self.0 & 0x8000_0000u32 != 0 {
-    //         let lock = NORMAL_LIST.lock().unwrap();
-    //         s.push_str(lock[self.0 as usize & 0x7FFF_FFFF].as_ref());
-    //         false
-    //     } else if self.0 == 0x7FFF_FFFF {
-    //         if first {
-    //             s.push('…');
-    //             false
-    //         } else {
-    //             s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
-    //             false
-    //         }
-    //     } else if self.0 & 0x4000_0000u32 != 0 {
-    //         if last {
-    //             s.push('…');
-    //             false
-    //         } else {
-    //             s.push(char::from_u32(rng().random_range(0x20..=0x7E)).unwrap());
-    //             true
-    //         }
-    //     } else {
-    //         s.push_str(
-    //             str::from_utf8(&[LOOKUP_SPECIAL[self.0 as usize & 0b00000001_11111111]]).unwrap(),
-    //         );
-    //         false
-    //     }
-    // }
 }
 
-// impl From<DisplayChar> for u32 {
-//     fn from(value: DisplayChar) -> Self {
-//         value.0
-//     }
-// }
-//
-// impl PartialEq<char> for DisplayChar {
-//     #[inline]
-//     fn eq(&self, other: &char) -> bool {
-//         self.0 == *other as u32
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::random;
+    use rstest::rstest;
+
+    #[test]
+    fn zeroed() {
+        unsafe { assert_eq!(DisplayChar::zeroed().u32(), 0) }
+    }
+
+    #[test]
+    fn split_dchar() {
+        let d = DisplayChar(0b10001011_10110111_10101011_00000100);
+        assert_eq!(
+            d.char().u32(),
+            CharValue(0b00000000_00010111_10101011_00000100).u32()
+        );
+        assert_eq!(d.style(), CharStyle(0b10001011_10100000_00000000_00000000))
+    }
+
+    #[test]
+    fn pad4_test() {
+        assert_eq!(PAD4(""), [0, 0, 0, 0]);
+        assert_eq!(PAD4("a"), [b'a', 0, 0, 0]);
+        assert_eq!(PAD4("ab"), [b'a', b'b', 0, 0]);
+        assert_eq!(PAD4("abc"), [b'a', b'b', b'c', 0]);
+        assert_eq!(PAD4("abcd"), [b'a', b'b', b'c', b'd']);
+    }
+
+    #[test]
+    #[should_panic]
+    fn pad4_test_long() {
+        PAD4("abcde");
+    }
+
+    #[rstest]
+    // Base styles:
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x0000_0000
+    )]
+    #[case(
+        BaseStyle::Comment,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x0400_0000
+    )]
+    #[case(
+        BaseStyle::DocComment,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x0800_0000
+    )]
+    #[case(
+        BaseStyle::ConstantOrField,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x0C00_0000
+    )]
+    #[case(
+        BaseStyle::FunctionOrOverloadOperators,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x1000_0000
+    )]
+    // ...
+    // (Middle variants should be correct if others are)
+    // ...
+    #[case(
+        BaseStyle::LspHint,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x5400_0000
+    )]
+    #[case(
+        BaseStyle::LspLens,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x5800_0000
+    )]
+    #[case(
+        BaseStyle::Autocompletion,
+        DiagnosticStyle::None,
+        DeprecatedState(false),
+        0x5C00_0000
+    )]
+    // Diagnostic styles:
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::Error,
+        DeprecatedState(false),
+        0x0040_0000
+    )]
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::UnknownSymbol,
+        DeprecatedState(false),
+        0x0080_0000
+    )]
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::RuntimeProblem,
+        DeprecatedState(false),
+        0x00C0_0000
+    )]
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::Warning,
+        DeprecatedState(false),
+        0x0100_0000
+    )]
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::Typo,
+        DeprecatedState(false),
+        0x0140_0000
+    )]
+    // deprecated = true:
+    #[case(
+        BaseStyle::NonStyled,
+        DiagnosticStyle::Error,
+        DeprecatedState(true),
+        0x0060_0000
+    )]
+    // All together:
+    #[case(
+        BaseStyle::Comment,
+        DiagnosticStyle::Error,
+        DeprecatedState(false),
+        0x0440_0000
+    )]
+    #[case(
+        BaseStyle::DocComment,
+        DiagnosticStyle::UnknownSymbol,
+        DeprecatedState(true),
+        0x08A0_0000
+    )]
+    #[case(
+        BaseStyle::Number,
+        DiagnosticStyle::RuntimeProblem,
+        DeprecatedState(false),
+        0x14C0_0000
+    )]
+    #[case(
+        BaseStyle::String,
+        DiagnosticStyle::Warning,
+        DeprecatedState(true),
+        0x1920_0000
+    )]
+    #[case(
+        BaseStyle::Trait,
+        DiagnosticStyle::Typo,
+        DeprecatedState(false),
+        0x3D40_0000
+    )]
+    #[case(
+        BaseStyle::UnsafeCall,
+        DiagnosticStyle::Error,
+        DeprecatedState(true),
+        0x4060_0000
+    )]
+    #[case(
+        BaseStyle::LspHint,
+        DiagnosticStyle::UnknownSymbol,
+        DeprecatedState(false),
+        0x5480_0000
+    )]
+    #[case(
+        BaseStyle::Autocompletion,
+        DiagnosticStyle::Typo,
+        DeprecatedState(true),
+        0x5D60_0000
+    )]
+    fn test_base_style_encoding(
+        #[case] base_style: BaseStyle,
+        #[case] diagnostic_style: DiagnosticStyle,
+        #[case] deprecated_state: DeprecatedState,
+        #[case] expected: u32,
+    ) {
+        let result = CharStyle::new(base_style, diagnostic_style, deprecated_state);
+        assert_eq!(result.0, expected);
+    }
+
+    #[test]
+    fn test_render_style() {
+        let mut cell = Cell::new("a");
+
+        let prev_cell = cell.clone();
+        CharStyle::new(
+            BaseStyle::NonStyled,
+            DiagnosticStyle::None,
+            DeprecatedState(false),
+        )
+        .render_style(false, &mut false, &mut cell);
+        assert_eq!(cell.modifier, prev_cell.modifier);
+
+        let prev_cell = cell.clone();
+        CharStyle::new(
+            BaseStyle::NonStyled,
+            DiagnosticStyle::Error,
+            DeprecatedState(false),
+        )
+        .render_style(false, &mut false, &mut cell);
+        assert_eq!(cell.modifier, prev_cell.modifier | Modifier::UNDER_CURLED);
+
+        let prev_cell = cell.clone();
+        CharStyle::new(
+            BaseStyle::Todo,
+            DiagnosticStyle::None,
+            DeprecatedState(true),
+        )
+        .render_style(false, &mut false, &mut cell);
+        assert_eq!(cell.modifier, prev_cell.modifier | Modifier::CROSSED_OUT);
+
+        // special:
+        let mut second_color = false;
+
+        let prev_cell = cell.clone();
+        CharStyle::new(
+            BaseStyle::Todo,
+            DiagnosticStyle::None,
+            DeprecatedState(false),
+        )
+        .render_style(true, &mut second_color, &mut cell);
+        assert_ne!(cell.bg, prev_cell.bg);
+        assert!(second_color);
+
+        let prev_cell = cell.clone();
+        CharStyle::new(
+            BaseStyle::Todo,
+            DiagnosticStyle::None,
+            DeprecatedState(false),
+        )
+        .render_style(true, &mut second_color, &mut cell);
+        assert_ne!(cell.bg, prev_cell.bg);
+        assert!(!second_color);
+    }
+
+    #[rstest]
+    #[case('a', "a")]
+    #[case('b', "b")]
+    #[case('ا', "ا")]
+    #[case('?', "?")]
+    #[case('\u{AD}', " ")]
+    fn render_cell_content_char(#[case] c: char, #[case] expected: &str) {
+        let mut emojis_to_render = vec![];
+
+        let mut cell1 = Cell::new(" ");
+        CharValue::from_utf8_char_one_cell(c).render_cell_content(
+            &mut cell1,
+            false,
+            &mut emojis_to_render,
+            random(),
+            random(),
+        );
+        assert!(emojis_to_render.is_empty());
+
+        let mut cell2 = Cell::new(" ");
+        CharValue::from_utf8_char_one_cell(c).render_cell_content(
+            &mut cell2,
+            true,
+            &mut emojis_to_render,
+            random(),
+            random(),
+        );
+        assert!(emojis_to_render.is_empty());
+
+        assert_eq!(cell1, cell2);
+        assert_eq!(cell1.symbol(), expected);
+    }
+
+    #[test]
+    fn render_cell_content_raw() {
+        let mut emojis_to_render = vec![];
+        for i in (0..0x20).chain(0x7F..0xA0) {
+            let mut string = DisplayString::empty();
+            CharValue::from_u8(i, &mut string, CharStyle::NONE);
+
+            assert!(string.len() > 1);
+            for dc in string {
+                assert!(dc.char().is_special());
+
+                let mut cell1 = Cell::new(" ");
+                dc.char().render_cell_content(
+                    &mut cell1,
+                    false,
+                    &mut emojis_to_render,
+                    random(),
+                    random(),
+                );
+                assert!(emojis_to_render.is_empty());
+
+                let mut cell2 = Cell::new(" ");
+                dc.char().render_cell_content(
+                    &mut cell2,
+                    true,
+                    &mut emojis_to_render,
+                    random(),
+                    random(),
+                );
+                assert!(emojis_to_render.is_empty());
+
+                assert_eq!(cell1, cell2);
+            }
+        }
+        for i in (0x20..0x7F).chain(0xA0..=0xFF) {
+            let mut string = DisplayString::empty();
+            CharValue::from_u8(i, &mut string, CharStyle::NONE);
+
+            assert_eq!(string.len(), 1);
+            let dc = string.into_iter().next().unwrap();
+
+            assert!(!dc.char().is_special());
+            assert_eq!(
+                dc.char().u32(),
+                CharValue::from_utf8_char_one_cell(char::from_u32(i).unwrap()).u32()
+            )
+        }
+    }
+
+    #[test]
+    fn render_cell_content_long() {
+        let mut emojis_to_render = vec![];
+
+        let a = "آََََََََََ";
+        assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
+
+        let cv = CharValue::from_lsu(LittleStringUni::new(a));
+
+        let mut cell1 = Cell::new(" ");
+        cv.render_cell_content(&mut cell1, false, &mut emojis_to_render, random(), random());
+        assert!(emojis_to_render.is_empty());
+
+        let mut cell2 = Cell::new(" ");
+        cv.render_cell_content(&mut cell2, true, &mut emojis_to_render, random(), random());
+        assert!(emojis_to_render.is_empty());
+
+        assert_eq!(cell1, cell2);
+        assert_eq!(cell1.symbol(), a);
+    }
+
+    #[test]
+    fn render_cell_content_emoji() {
+        let mut emojis_to_render = vec![];
+        let mut string = DisplayString::empty();
+        for emoji in ["😂", "👍", "😒", "🌷", "❤", "️✅"] {
+            CharValue::from_emoji(emoji, &mut string);
+
+            assert_eq!(string.len(), 2);
+            assert_eq!(string[1].char().u32(), CharValue::EMOJI_LAST.u32());
+
+            // emoji part:
+            let c = string[0].char();
+            let (x, y) = (random(), random());
+            let mut cell1 = Cell::new(" ");
+            c.render_cell_content(&mut cell1, false, &mut emojis_to_render, x, y);
+            assert_eq!(emojis_to_render, [(x, y, c.0)]);
+
+            let mut cell2 = Cell::new(" ");
+            c.render_cell_content(&mut cell2, true, &mut emojis_to_render, x, y);
+            assert_eq!(emojis_to_render, [(x, y, c.0)]); // Did not change, because last=true
+
+            assert_eq!(cell1, cell2);
+
+            // emoji last part:
+            emojis_to_render.clear();
+            let c = string[1].char();
+
+            let mut cell1 = Cell::new(" ");
+            c.render_cell_content(&mut cell1, false, &mut emojis_to_render, x, y);
+
+            let mut cell2 = Cell::new(" ");
+            c.render_cell_content(&mut cell2, true, &mut emojis_to_render, x, y);
+
+            assert_eq!(cell1, cell2);
+            assert!(emojis_to_render.is_empty());
+
+            // Cleanup for next loop cycle
+            string.clear();
+        }
+    }
+
+    #[test]
+    fn test_whitespace() {
+        assert!(CharValue::from_utf8_char_one_cell(' ').is_whitespace());
+        assert!(CharValue::from_utf8_char_one_cell('\t').is_whitespace());
+        assert!(CharValue::from_utf8_char_one_cell('\n').is_whitespace());
+        assert!(CharValue::from_utf8_char_one_cell('\r').is_whitespace());
+        assert!(!CharValue::from_utf8_char_one_cell('a').is_whitespace());
+
+        let mut string = DisplayString::empty();
+        CharValue::from_u8(0, &mut string, CharStyle::NONE);
+        for c in string {
+            assert!(!c.char().is_whitespace())
+        }
+    }
+
+    #[test]
+    fn test_char_start_offset() {
+        // chars:
+        for c in ['a', 'b', 'ا', '1'] {
+            assert_eq!(CharValue::from_utf8_char_one_cell(c).char_start_offset(), 0);
+        }
+
+        // longs:
+        let a = "آََََََََََ";
+        assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
+        assert_eq!(
+            CharValue::from_lsu(LittleStringUni::new(a)).char_start_offset(),
+            0
+        );
+
+        // special:
+        for i in (0..0x20).chain(0x7F..0xA0) {
+            let mut string = DisplayString::empty();
+            CharValue::from_u8(i, &mut string, CharStyle::NONE);
+
+            assert!(string.len() > 1);
+            for (idx, dc) in string.into_iter().enumerate() {
+                assert_eq!(dc.char().char_start_offset(), idx);
+            }
+        }
+
+        // emoji:
+        let mut string = DisplayString::empty();
+        for emoji in ["😂", "👍", "😒", "🌷", "❤", "️✅"] {
+            CharValue::from_emoji(emoji, &mut string);
+
+            assert_eq!(string.len(), 2);
+            assert_eq!(string[1].char().u32(), CharValue::EMOJI_LAST.u32());
+
+            assert_eq!(string[0].char().char_start_offset(), 0);
+            assert_eq!(string[1].char().char_start_offset(), 1);
+
+            // Cleanup for next loop cycle
+            string.clear();
+        }
+    }
+
+    #[test]
+    fn test_is_variable_name() {
+        // ========= True cases =========
+        // char:
+        for c in ['a', 'b', 'ا', '1', '_', 'A'] {
+            assert!(CharValue::from_utf8_char_one_cell(c).is_variable_name())
+        }
+        // long:
+        for c in ["a", "b", "آََََََََََ", "1", "_", "a"] {
+            assert!(CharValue::from_lsu(LittleStringUni::new(c)).is_variable_name())
+        }
+        // ========= False cases ==========
+        // char:
+        for c in ['@', '*', '&'] {
+            assert!(!CharValue::from_utf8_char_one_cell(c).is_variable_name())
+        }
+        // long:
+        for c in ["@ََََََ", "*"] {
+            assert!(!CharValue::from_lsu(LittleStringUni::new(c)).is_variable_name())
+        }
+        // emoji:
+        let mut string = DisplayString::empty();
+        for emoji in ["😂", "👍", "😒", "🌷", "❤", "️✅"] {
+            CharValue::from_emoji(emoji, &mut string);
+
+            assert_eq!(string.len(), 2);
+
+            assert!(!string[0].char().is_variable_name());
+            assert!(!string[1].char().is_variable_name());
+
+            // Cleanup for next loop cycle
+            string.clear();
+        }
+    }
+
+    #[test]
+    fn from_utf8_grapheme_to_dstring() {
+        let mut string = DisplayString::empty();
+
+        // char:
+        for c in ["a", "b", "%", "ا"] {
+            CharValue::from_utf8_grapheme_to_dstring(c, &mut string, CharStyle::NONE);
+            assert_eq!(string.len(), 1);
+            assert_eq!(string[0].char().u32(), c.chars().next().unwrap() as u32);
+            string.clear();
+        }
+
+        // special: Impossible
+
+        // long:
+        let a = "آََََََََََ";
+        assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
+
+        CharValue::from_utf8_grapheme_to_dstring(a, &mut string, CharStyle::NONE);
+        assert_eq!(string.len(), 1);
+        assert!((0x0014_0000..=0x001F_FFFF).contains(&string[0].char().u32()));
+        string.clear();
+
+        // emoji:
+        for emoji in ["😂", "👍", "😒", "🌷", "❤"] {
+            // Todo: the ️✅ emoji is not supported by `emojis` crate. Should change the emoji detection platform
+            CharValue::from_utf8_grapheme_to_dstring(emoji, &mut string, CharStyle::NONE);
+
+            assert_eq!(string.len(), 2, "{emoji}");
+            assert_eq!(
+                string[1].char().u32(),
+                CharValue::EMOJI_LAST.u32(),
+                "{emoji}"
+            );
+
+            string.clear();
+        }
+    }
+
+    #[test]
+    fn test_char_eq() {
+        // compare char with char:
+        for c in ['a', 'b', 'ا'] {
+            assert_eq!(CharValue::from_utf8_char_one_cell(c), c);
+            assert_ne!(CharValue::from_utf8_char_one_cell(c), '#');
+        }
+
+        // compare special with char:
+        for i in (0..0x20).chain(0x7F..0xA0) {
+            let mut string = DisplayString::empty();
+            CharValue::from_u8(i, &mut string, CharStyle::NONE);
+
+            assert!(string.len() > 1);
+            for dc in string {
+                assert_ne!(dc.char(), 'a');
+            }
+        }
+
+        // compare with long:
+        for c in ["a", "b", "ا"] {
+            assert_ne!(CharValue::from_lsu(LittleStringUni::new(c)), '#');
+            assert_ne!(
+                CharValue::from_lsu(LittleStringUni::new(c)),
+                c.chars().next().unwrap()
+            ); // This is true. a long dchar SHOULD contain more than one character.
+        }
+
+        // compare with emojis:
+        let mut string = DisplayString::empty();
+        CharValue::from_emoji("😂", &mut string);
+        assert_eq!(string.len(), 2);
+
+        assert_ne!(string[0].char(), '1');
+        assert_ne!(string[1].char(), '1');
+    }
+
+    #[test]
+    fn utf8_write() {
+        let mut dstring = DisplayString::empty();
+        unsafe {
+            dstring.push(CharValue::from_utf8_char_one_cell('c').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell('h').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell('a').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell('r').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
+
+            let a = "آََََََََََ";
+            assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
+            dstring.push(CharValue::from_lsu(LittleStringUni::new(a)).build(CharStyle::NONE));
+
+            dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
+
+            CharValue::from_u8(0, &mut dstring, CharStyle::NONE);
+
+            dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
+
+            CharValue::from_emoji("😂", &mut dstring);
+
+            let mut buffer = Vec::new();
+            dstring.utf8__write_to(&mut buffer).unwrap();
+
+            assert_eq!(buffer, "char آََََََََََ \0 😂".bytes().collect::<Vec<_>>());
+        }
+    }
+
+    #[test]
+    fn raw_write() {
+        let mut dstring = DisplayString::empty();
+        for i in 0..0x100 {
+            CharValue::from_u8(i, &mut dstring, CharStyle::NONE)
+        }
+
+        let mut buffer = Vec::new();
+        unsafe {
+            dstring.raw__write_to(&mut buffer).unwrap();
+        }
+
+        assert_eq!(buffer, b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7f\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f\xa0\xa1\xa2\xa3\xa4\xa5\xa6\xa7\xa8\xa9\xaa\xab\xac\xad\xae\xaf\xb0\xb1\xb2\xb3\xb4\xb5\xb6\xb7\xb8\xb9\xba\xbb\xbc\xbd\xbe\xbf\xc0\xc1\xc2\xc3\xc4\xc5\xc6\xc7\xc8\xc9\xca\xcb\xcc\xcd\xce\xcf\xd0\xd1\xd2\xd3\xd4\xd5\xd6\xd7\xd8\xd9\xda\xdb\xdc\xdd\xde\xdf\xe0\xe1\xe2\xe3\xe4\xe5\xe6\xe7\xe8\xe9\xea\xeb\xec\xed\xee\xef\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfe\xff");
+    }
+
+    #[test]
+    fn utf8_to_raw() {
+        let mut dstring = DisplayString::empty();
+        unsafe {
+            dstring.push(CharValue::from_utf8_char_one_cell('c').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell('h').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell('a').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell('r').build(CharStyle::NONE));
+            dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
+
+            let a = "آََََََََََ";
+            assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
+            dstring.push(CharValue::from_lsu(LittleStringUni::new(a)).build(CharStyle::NONE));
+
+            dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
+
+            CharValue::from_u8(0, &mut dstring, CharStyle::NONE);
+
+            dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
+
+            CharValue::from_emoji("😂", &mut dstring);
+
+            let raw = dstring.utf8_to_raw(CharStyle::NONE);
+
+            let mut iter = "char آََََََََََ \0 😂".bytes();
+            let mut string = Vec::with_capacity(1);
+            for a in raw {
+                a.char().raw__write_to(&mut string).unwrap();
+                if !string.is_empty() {
+                    assert_eq!(string[0], iter.next().unwrap());
+                }
+                string.clear();
+            }
+        }
+    }
+
+    #[test]
+    fn raw_to_utf8() {
+        let mut dstring = DisplayString::empty();
+        for i in 0..0x100 {
+            CharValue::from_u8(i, &mut dstring, CharStyle::NONE)
+        }
+
+        unsafe {
+            let utf8 = dstring.raw_to_utf8(CharStyle::NONE);
+
+            let mut string = Vec::with_capacity(0x100);
+            for a in utf8 {
+                a.char().utf8__write_to(&mut string).unwrap();
+            }
+            assert_eq!(string, "\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7f��������������������������������������������������������������������������������������������������������������������������������".as_bytes())
+        }
+    }
+}

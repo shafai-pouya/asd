@@ -1,11 +1,9 @@
 use crate::assets::constants::DURATION_SMALL_TIMER;
-use crate::backend::caret::{Carets, CursorEditor, Position};
+use crate::backend::caret::{Carets, CursorEditor};
 use crate::backend::checkpoint::Checkpoints;
-use crate::backend::cursor::Cursor;
 use crate::backend::display_string::{DisplaySlice, DisplayString};
 use crate::backend::little_string::LittleString;
 use crate::backend::mostly_one_vec::MostlyOneVec;
-use crate::backend::selection::Selection;
 use std::ops::Index;
 use std::slice::SliceIndex;
 use std::time::Instant;
@@ -21,6 +19,7 @@ pub(crate) fn whitespaces_in_the_start_of_the_line(s: &DisplayString) -> &Displa
 
     &s[..idx]
 }
+
 pub struct Content {
     lines: Vec<DisplayString>,
 }
@@ -35,7 +34,7 @@ impl Index<usize> for Content {
 
 impl Content {
     #[inline]
-    pub(crate) fn reserve_gms_at_line(&mut self, line: usize, cap: usize) {
+    pub(crate) fn reserve_at_line(&mut self, line: usize, cap: usize) {
         self.lines[line].reserve(cap);
     }
 
@@ -72,7 +71,7 @@ impl Content {
         caret_ptr.sync_selection_with_cursor();
         let pos_ptr = caret_ptr.get_position();
         let min = pos_ptr.get_min();
-        let max = pos_ptr.get_max(false);
+        let max = pos_ptr.get_max();
 
         // Do checkpoints:
         caret_ptr.start_checkpoint();
@@ -155,9 +154,9 @@ impl Content {
         let caret_ptr = &mut carets.cursors.carets[carets.cursor];
         caret_ptr.sync_selection_with_cursor();
         let new_text_lines_n = new_text.len();
-        let pos_ptr = caret_ptr.get_position();
-        let min = pos_ptr.get_min();
-        let max = pos_ptr.get_max(false);
+        let pos_ref = caret_ptr.get_position();
+        let min = pos_ref.get_min();
+        let max = pos_ref.get_max();
         let selected_text_lines_n = max.0 - min.0 + 1;
         let last_new_line_len = if new_text_lines_n == 0 {
             0
@@ -166,8 +165,9 @@ impl Content {
         };
 
         match (new_text_lines_n, selected_text_lines_n) {
-            (0, 0) | (0, 1) | (1, 0) | (1, 1) => {
-                self.lines[pos_ptr.cursor.line].replace_range(
+            (_, 0) => unreachable!(), // "max.0 - min.0 + 1" always return 1 or more
+            (0, 1) | (1, 1) => {
+                self.lines[min.0].replace_range(
                     min.1..max.1,
                     new_text.into_iter().next().unwrap_or(LittleString::empty()),
                 );
@@ -186,7 +186,7 @@ impl Content {
                     self.lines[min.0].push_slice(&last_line[max.1..]);
                 } // Safety: The caller
             }
-            (_, 0) | (_, 1) => {
+            (_, 1) => {
                 let mut new_text = new_text.into_iter();
                 let first_new_line = new_text.next().unwrap(); // We checked the length in the match case
                 self.lines.splice(
@@ -220,21 +220,10 @@ impl Content {
             }
         }
 
-        unsafe {
-            if !caret_ptr.get_position().is_selection_none() {
-                caret_ptr.set_position_unchecked(Position::new(
-                    Cursor::new(max.0, max.1),
-                    Selection::empty(),
-                ));
-            }
-        }
-
         carets.move_anything_after_ud_np_included(
-            max.0,
-            max.1,
             new_text_lines_n
                 .saturating_sub(1)
-                .overflowing_sub(selected_text_lines_n.saturating_sub(1))
+                .overflowing_sub(selected_text_lines_n - 1)
                 .0 as isize,
             (last_new_line_len + if new_text_lines_n <= 1 { min.1 } else { 0 })
                 .overflowing_sub(max.1)
@@ -254,7 +243,7 @@ impl Content {
         (0..cursors.carets.len())
             .map(|i| {
                 let min = cursors.carets[i].get_position().get_min();
-                let max = cursors.carets[i].get_position().get_max(false);
+                let max = cursors.carets[i].get_position().get_max();
                 (min.0..=max.0)
                     .map(|j| match (j == min.0, j == max.0) {
                         (true, true) => LittleString::from_slice(&self.lines[j][min.1..max.1]),
@@ -265,5 +254,47 @@ impl Content {
                     .collect::<MostlyOneVec<_>>()
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::backend::content::whitespaces_in_the_start_of_the_line;
+    use crate::backend::display_char::CharStyle;
+    use crate::backend::display_string::DisplayString;
+    use crate::backend::encoding::Encoding;
+
+    #[test]
+    fn test_whitespaces_in_the_start() {
+        fn assert_pointers<T>(a: &[T], b: &[T]) {
+            assert_eq!(a.len(), b.len());
+            assert_eq!(a.as_ptr(), b.as_ptr());
+        }
+
+        let string = DisplayString::from_str_utf8(" abcd", CharStyle::NONE);
+        assert_pointers(
+            &whitespaces_in_the_start_of_the_line(&string).gms,
+            &string.gms[..1],
+        );
+
+        let string = DisplayString::from_str_utf8("  abcd", CharStyle::NONE);
+        assert_pointers(
+            &whitespaces_in_the_start_of_the_line(&string).gms,
+            &string.gms[..2],
+        );
+
+        let string = DisplayString::from_str_utf8("    abcd", CharStyle::NONE);
+        assert_pointers(
+            &whitespaces_in_the_start_of_the_line(&string).gms,
+            &string.gms[..4],
+        );
+    }
+
+    #[test]
+    fn test_few_things() {
+        let (_, mut content) = Encoding::from_str_utf8(include_str!("../assets/test.txt"));
+        content.reserve_at_line(1, 200);
+        assert!(content[1].gms.capacity() >= 200 + content[1].gms.len());
+        assert_eq!(content.len(), content.get_lines().len());
     }
 }

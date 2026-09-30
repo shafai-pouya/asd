@@ -127,7 +127,7 @@ impl Encoding {
         }
     }
 
-    pub(crate) fn from_file(path: &Path) -> (Encoding, Content) {
+    pub(crate) fn from_file(path: &Path) -> (Self, Content) {
         let content;
         // let mut logs = Vec::new();
         match fs::exists(path) {
@@ -216,7 +216,7 @@ impl Encoding {
         Self::from_str_utf8(&content)
     }
 
-    pub(crate) fn from_str_utf8(content: &str) -> (Encoding, Content) {
+    pub(crate) fn from_str_utf8(content: &str) -> (Self, Content) {
         let mut lines: Vec<DisplayString> = vec![];
         let mut last = String::new();
         let mut line_ending = None;
@@ -224,12 +224,12 @@ impl Encoding {
         while let Some(ch) = chars.next() {
             if ch == '\n' {
                 line_ending.get_or_insert(LineEnding::Lf);
-                lines.push(DisplayString::from_str(
+                lines.push(DisplayString::from_str_utf8(
                     &std::mem::take(&mut last),
                     CharStyle::NONE,
                 ));
             } else if ch == '\r' {
-                lines.push(DisplayString::from_str(
+                lines.push(DisplayString::from_str_utf8(
                     &std::mem::take(&mut last),
                     CharStyle::NONE,
                 ));
@@ -243,7 +243,7 @@ impl Encoding {
                 last.push(ch); // It's Ok
             }
         }
-        lines.push(DisplayString::from_str(&last, CharStyle::NONE));
+        lines.push(DisplayString::from_str_utf8(&last, CharStyle::NONE));
         (
             Encoding::UTF8(line_ending.unwrap_or(LineEnding::Crlf)),
             Content::from_lines(lines),

@@ -1,8 +1,6 @@
 use crate::backend::buffer::Buffer;
-use crate::backend::caret::{CursorEditor, Position};
-use crate::backend::cursor::Cursor;
+use crate::backend::caret::CursorEditor;
 use crate::backend::little_string::LittleString;
-use crate::backend::selection::Selection;
 use crate::{Clipboard, movec};
 
 /// This trait made to be implemented for only one struct. It made
@@ -21,18 +19,11 @@ impl EditOperators for Buffer {
     fn op_materialize_virtual_spaces(&mut self) {
         for i in 0..self.carets.carets.len() {
             let min = self.carets.carets[i].get_position().get_min();
-            let line = min.0;
-            let current_col = min.1;
-            let line_len = self.content[line].len();
-            if line_len < current_col {
-                let diff = current_col - line_len;
-                self.content.reserve_gms_at_line(line, diff);
-                unsafe {
-                    self.carets.carets[i].set_position_unchecked(Position::new(
-                        Cursor::new(line, line_len),
-                        Selection::empty(),
-                    ));
-                }
+            let line_len = self.content[min.0].len();
+            if line_len < min.1 {
+                let diff = min.1 - line_len;
+                self.content.reserve_at_line(min.0, diff);
+                self.carets.carets[i].no_virtual_spaces(&self.content);
                 unsafe {
                     self.content.replace_text(
                         &mut self.checkpoints,
@@ -45,50 +36,18 @@ impl EditOperators for Buffer {
                 } // Safety: spaces work on all encodings
                 continue;
             }
-
-            let max = self.carets.carets[i].get_position().get_max(false);
-            let line = max.0;
-            let col = max.1;
-            let line_len = self.content[line].len();
-            if line_len < col {
-                let mut pos = *self.carets.carets[i].get_position();
-                pos.set_max((line, line_len));
-                unsafe {
-                    self.carets.carets[i].set_position_unchecked(pos);
-                }
-            }
         }
     }
 
     fn op_no_virtual_spaces(&mut self) {
         for i in 0..self.carets.carets.len() {
-            let mut pos = *self.carets.carets[i].get_position();
-            if !pos.selection.is_none() {
-                let line = pos.selection.get_line();
-                let current_col = pos.selection.get_col();
-                if self.content[line].len() < current_col {
-                    unsafe {
-                        pos.selection_mut().set_col(self.content[line].len());
-                    }
-                }
-            }
-            let line = pos.cursor.get_line();
-            let current_col = pos.cursor.get_col();
-            if self.content[line].len() < current_col {
-                unsafe {
-                    pos.cursor_mut().set_col(self.content[line].len());
-                }
-            }
-            unsafe {
-                self.carets.carets[i].set_position_unchecked(pos);
-            }
-            self.carets.carets[i].merge_sel_pos()
+            self.carets.carets[i].no_virtual_spaces(&self.content);
         }
     }
 
     fn op_get_tab_little_string(ce: &CursorEditor, tab_size: usize) -> LittleString {
         let tab_len =
-            tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor.col % tab_size);
+            tab_size - (ce.cursors.carets[ce.cursor].get_position().cursor.col.col % tab_size);
         LittleString::from_spaces_repeated(tab_len)
     }
 

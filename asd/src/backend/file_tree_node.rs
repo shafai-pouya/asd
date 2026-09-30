@@ -120,6 +120,7 @@ impl FileTreeNode {
         } else {
             BuffersLock
                 .get_file_change_guard()
+                .lock()
                 .open_file_or_focus(self.path.clone());
         }
     }
@@ -149,6 +150,7 @@ impl FileTreeNode {
         str.push(
             match BuffersLock
                 .get_check_guard()
+                .lock()
                 .get_online_state(self.get_mut(ptr).unwrap().get_inode())
             {
                 // The pointer should be valid

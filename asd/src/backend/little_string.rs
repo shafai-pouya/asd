@@ -108,13 +108,15 @@ impl LittleString {
         if len > N_MAX_LITTLE {
             let mut s = DisplayString::with_capacity(len);
             for _ in 0..len {
-                unsafe { s.push(const { CharValue::from_utf8_char(' ').build(CharStyle::NONE) }) } // Safety: spaces work for all encodings
+                unsafe {
+                    s.push(const { CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE) })
+                } // Safety: spaces work for all encodings
             }
             Self::Big(s)
         } else {
             Self::Little((
                 len as u8,
-                [unsafe { const { CharValue::from_utf8_char(' ').build(CharStyle::NONE) } };
+                [const { CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE) };
                     N_MAX_LITTLE],
             ))
         }
@@ -161,12 +163,10 @@ impl LittleString {
         LittleString::Little((0, [unsafe { DisplayChar::zeroed() }; N_MAX_LITTLE]))
     }
 
-    /// Safety: It should be one cell utf8 char
-    pub(crate) unsafe fn from_one_cell_utf8_char_unchecked(c: char) -> LittleString {
+    /// The utf8 char should fit safely into one cell
+    pub(crate) fn from_one_cell_utf8_char_unchecked(c: char) -> LittleString {
         let mut data = [unsafe { DisplayChar::zeroed() }; N_MAX_LITTLE];
-        unsafe {
-            data[0] = CharValue::from_utf8_char(c).build(CharStyle::NONE);
-        } // Safety: The caller
+        data[0] = CharValue::from_utf8_char_one_cell(c).build(CharStyle::NONE);
         LittleString::Little((1, data))
     }
 
@@ -243,6 +243,29 @@ impl Deref for LittleStringUni {
         match self {
             LittleStringUni::Little((len, data)) => str::from_utf8(&data[..*len as usize]).unwrap(),
             LittleStringUni::Big(s) => s,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::backend::little_string::LittleStringUni;
+
+    #[test]
+    fn test_deref_lsu() {
+        assert_eq!(&*LittleStringUni::new(""), "");
+        assert_eq!(&*LittleStringUni::new("abcd"), "abcd");
+        let long = "This is a big string. Of course it is enough for tests according to N_MAX_LITTLE_UNI which is 10 now, but still making this long";
+        assert_eq!(&*LittleStringUni::new(long), long);
+    }
+
+    #[test]
+    fn test_is_variable_name_lsu() {
+        for i in ["a", "A", "_", "1", "0", "ا", "ب"] {
+            assert!(LittleStringUni::new(i).is_variable_name(), "{i}");
+        }
+        for i in ["!", "@", "*"] {
+            assert!(!LittleStringUni::new(i).is_variable_name(), "{i}");
         }
     }
 }

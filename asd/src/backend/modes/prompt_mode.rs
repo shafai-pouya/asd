@@ -139,7 +139,8 @@ impl SaveAsMode {
                              KeyCode::Enter == e.code {
                              app.change_mode = Some(Box::new(EditorMode::new()));
                              LOGS.clear();
-                             let mut buffers = BuffersLock.get_change_guard();
+                             let buffers = BuffersLock.get_change_guard();
+                             let mut buffers = buffers.lock();
                              let active_buffer = buffers.inner_mut().active_mut();
                              active_buffer.save(Some(Path::new(&data.filepath)));
                              active_buffer.modified = true;
@@ -173,7 +174,7 @@ impl SaveAsMode {
                                     let min = sel.min(data.cursor);
                                     let max = sel.max(data.cursor);
                                     app.internal_clipboard = (Encoding::UTF8(LineEnding::Crlf), movec![movec![
-                                        LittleString::Big(DisplayString::from_str(
+                                        LittleString::Big(DisplayString::from_str_utf8(
                                             &data.filepath[min as usize..max as usize], CharStyle::NONE,
                                         ))
                                     ]]);
@@ -218,7 +219,7 @@ impl SaveAsMode {
                                     data.selection = None;
                                     data.cursor = min;
                                     app.internal_clipboard = (Encoding::UTF8(LineEnding::Crlf), movec![movec![
-                                        LittleString::Big(DisplayString::from_str(
+                                        LittleString::Big(DisplayString::from_str_utf8(
                                             &data.filepath[min as usize..max as usize], CharStyle::NONE,
                                         ))
                                     ]]);

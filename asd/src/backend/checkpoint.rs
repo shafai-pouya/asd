@@ -67,8 +67,8 @@ impl Checkpoints {
                 .carets
                 .iter_mut()
                 .map(|caret| {
-                    let mut line = caret.get_position().cursor.get_line();
-                    let mut col = caret.get_position().cursor.get_col();
+                    let mut line = caret.get_position().cursor.line;
+                    let mut col = caret.get_position().cursor.col.col;
                     let mut result = movec!();
 
                     loop {

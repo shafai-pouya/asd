@@ -88,12 +88,13 @@ impl App {
             color: C_LOG_HINT,
             handler: Some(|me, _| {
                 if let MouseEventKind::Down(MouseButton::Left) = me.kind {
-                    BuffersLock.get_file_change_guard().open_help();
+                    BuffersLock.get_file_change_guard().lock().open_help();
                 };
             }),
         });
         BuffersLock
             .get_file_change_guard()
+            .lock()
             .open_file_or_focus(path.to_path_buf());
         let is_dir = match path.metadata() {
             Ok(meta) => meta.file_type().is_dir(),
@@ -117,8 +118,27 @@ impl App {
             internal_clipboard: (Encoding::Raw, movec![]),
         }
     }
+    #[inline]
+    fn custom(showing_name: String, content: &str) -> Self {
+        BuffersLock
+            .get_file_change_guard()
+            .lock()
+            .open_custom(showing_name, content);
+        Self {
+            exit: false,
+            next_is_separator_event: false,
+            file_tree: None,
+            terminal_cursor: TerminalCursor::new(),
+            last_content_rect: Rect::default(),
+            last_tree_rect: Rect::default(),
+            last_tree_and_content_separator_rect: Rect::default(),
+            double_click_details: (u16::MAX, u16::MAX, Instant::now()),
+            change_mode: None,
+            internal_clipboard: (Encoding::Raw, movec![]),
+        }
+    }
     fn help() -> Self {
-        BuffersLock.get_file_change_guard().open_help();
+        BuffersLock.get_file_change_guard().lock().open_help();
         Self {
             exit: false,
             next_is_separator_event: false,
@@ -205,14 +225,16 @@ impl App {
 
     #[inline]
     fn render(&mut self, frame: &mut Frame, mode: &mut Box<dyn Mode>) -> Vec<(u16, u16, u32)> {
-        let mut buffers = BuffersLock.get_render_guard();
+        let buffers = BuffersLock.get_render_guard();
+        let mut buffers = buffers.lock();
         let emoji_queue = render_base(self, frame, !mode.needs_terminal_cursor(), &mut buffers);
         mode.render_function(frame);
         emoji_queue
     }
 
     fn operate_quit(&mut self) {
-        let mut buffers = BuffersLock.get_check_guard();
+        let buffers = BuffersLock.get_check_guard();
+        let mut buffers = buffers.lock();
         buffers.commit_all();
         if !buffers.any_modified() {
             self.exit = true;
@@ -308,4 +330,22 @@ fn main() {
     // end
     execute!(std::io::stdout(), DisableMouseCapture,).unwrap(); // Usually ok, but you can panic here;
     ratatui::restore();
+}
+
+#[cfg(test)]
+mod tests {
+
+    // #[rstest]
+    // #[case(include_str!("assets/test.txt"))]
+    // fn test_handle_event(#[case] test_file_content: &str) {
+    //     let mut app = App::custom("test buffer".to_string(), test_file_content);
+    //     app.last_content_rect = Rect {
+    //         x: 12,
+    //         y: 34,
+    //         width: 20,
+    //         height: 20,
+    //     };
+    //     let mut mode = Box::new(EditorMode::new()) as Box<dyn Mode>;
+    //     app.handle_event(&mut mode, Event::Mouse())
+    // } todo: Complete the test
 }
