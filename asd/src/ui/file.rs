@@ -50,7 +50,7 @@ pub(crate) fn render_file(
             break;
         };
         let mut second_color = false;
-        for (char_idx, x) in (active_buffer.scrollbar.left_position as usize
+        for (x, char_idx) in (active_buffer.scrollbar.left_position as usize
             ..((active_buffer.scrollbar.left_position + content_area.width) as usize))
             .enumerate()
         {

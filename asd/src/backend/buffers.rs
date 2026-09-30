@@ -66,6 +66,13 @@ impl BuffersLock {
         }
     }
 
+    #[cfg(feature = "debug-tools")]
+    pub fn get_debug_guard(&self) -> BuffersDebugGuardArc {
+        BuffersDebugGuardArc {
+            inner: self.get_guard(),
+        }
+    }
+
     pub fn get_file_change_guard(&self) -> BuffersFileChangeGuardArc {
         BuffersFileChangeGuardArc {
             inner: self.get_guard(),
@@ -193,6 +200,28 @@ impl<'a> BuffersRenderGuard<'a> {
     pub fn inner(&self) -> &Buffers {
         self.buffers.buffers.deref()
     }
+    pub fn inner_mut(&mut self) -> &mut Buffers {
+        self.buffers.buffers.deref_mut()
+    }
+}
+#[cfg(feature = "debug-tools")]
+pub struct BuffersDebugGuardArc {
+    inner: BuffersGuardArc,
+}
+#[cfg(feature = "debug-tools")]
+impl BuffersDebugGuardArc {
+    pub fn lock(&self) -> BuffersDebugGuard<'_> {
+        BuffersDebugGuard {
+            buffers: self.inner.lock(),
+        }
+    }
+}
+#[cfg(feature = "debug-tools")]
+pub struct BuffersDebugGuard<'a> {
+    buffers: BuffersGuard<'a>,
+}
+#[cfg(feature = "debug-tools")]
+impl<'a> BuffersDebugGuard<'a> {
     pub fn inner_mut(&mut self) -> &mut Buffers {
         self.buffers.buffers.deref_mut()
     }

@@ -1,5 +1,6 @@
 use crate::App;
 use crate::assets::constants::DOUBLE_CLICK_DURATION;
+use crate::debug_tools::inner::debug_key_events;
 use crossterm::event::{Event, KeyEvent, MouseEvent, MouseEventKind};
 use std::time::Instant;
 
@@ -35,6 +36,9 @@ impl<T> EventHandler<T> {
     }
 
     fn handle_key_event(&mut self, arg: &mut T, app: &mut App, event: KeyEvent) {
+        if debug_key_events(event) {
+            return;
+        }
         for key_handler in &self.key_handlers {
             if !key_handler(arg, app, &event) {
                 break;

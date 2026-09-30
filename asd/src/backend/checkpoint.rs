@@ -4,6 +4,7 @@ use crate::backend::caret::Carets;
 use crate::backend::content::Content;
 use crate::backend::little_string::LittleString;
 use crate::backend::mostly_one_vec::MostlyOneVec;
+use crate::debug_tools::inner::{debug_commit, debug_push_commit};
 use crate::movec;
 use crate::ui::log::{LOGS, Log};
 use std::time::Instant;
@@ -47,6 +48,7 @@ impl Checkpoints {
         }
     }
     pub(crate) fn commit(&mut self, carets: &mut Carets, content: &Content) {
+        debug_commit(self, carets, content);
         self.little_timer_deadline = None;
         self.big_timer_deadline = None;
         if carets.carets.iter().all(|c| {
@@ -62,6 +64,7 @@ impl Checkpoints {
             }
             return;
         }
+        debug_push_commit();
         self.push(Checkpoint {
             inner: carets
                 .carets

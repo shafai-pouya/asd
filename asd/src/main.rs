@@ -1,5 +1,6 @@
 mod assets;
 mod backend;
+mod debug_tools;
 mod edit_controller;
 mod edit_operators;
 mod ui;
@@ -13,6 +14,7 @@ use crate::backend::little_string::LittleString;
 use crate::backend::modes::Mode;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::mostly_one_vec::MostlyOneVec;
+use crate::debug_tools::inner::debug_render;
 use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::log::{LOGS, Log};
@@ -170,6 +172,7 @@ impl App {
         terminal
             .draw(|frame| {
                 emoji_queue = self.render(frame, mode);
+                debug_render(frame, self);
             })
             .unwrap();
         self.terminal_cursor.render_emoji_queue(emoji_queue);

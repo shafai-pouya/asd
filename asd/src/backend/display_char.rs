@@ -1,8 +1,10 @@
 use crate::assets::colors::{
-    C_BG_SPECIAL_BYTES, apply_base_style, apply_deprecated_state, apply_diagnostic_style,
+    C_BG_SPECIAL_BYTES, C_LOG_ERROR, apply_base_style, apply_deprecated_state,
+    apply_diagnostic_style,
 };
 use crate::backend::display_string::DisplayString;
 use crate::backend::little_string::LittleStringUni;
+use crate::ui::log::{LOGS, Log};
 use once_cell::sync::Lazy;
 use ratatui::buffer::{Cell, CellDiffOption};
 use ratatui::prelude::Modifier;
@@ -618,6 +620,15 @@ impl DisplayChar {
         last: bool,
         buf: &mut ratatui::buffer::Buffer,
     ) {
+        #[cfg(debug_assertions)]
+        if buf.cell((x, y)).is_none() {
+            LOGS.push(Log {
+                message: format!("BUG!! Please contact us. This is a bug about rendering the ui. The position does not exist. file {}, line {}", file!(), line!()),
+                color: C_LOG_ERROR,
+                handler: None,
+            });
+            return;
+        }
         self.char().render_cell_content(
             buf.cell_mut((x, y)).unwrap(),
             last,

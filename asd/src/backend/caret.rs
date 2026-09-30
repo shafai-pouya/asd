@@ -16,7 +16,7 @@ pub struct CursorEditor<'a> {
 
 impl<'a> CursorEditor<'a> {
     pub(crate) fn move_anything_after_ud_np_included(&mut self, ud: isize, np: isize) {
-        self.cursors.carets[self.cursor].unselect_to_the_side(true);
+        self.cursors.carets[self.cursor].unselect_to_the_side(false);
         let Cursor {
             line,
             col: CursorCol { col, .. },

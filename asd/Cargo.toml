@@ -16,3 +16,6 @@ rand = "0.8.6"
 
 [dev-dependencies]
 rstest = "0.26"
+
+[features]
+debug-tools = []
