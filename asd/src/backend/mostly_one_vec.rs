@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Index, IndexMut};
-use libc::newlocale;
 
 pub enum MostlyOneVec<T> {
     Zero,
