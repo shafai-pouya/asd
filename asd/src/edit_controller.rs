@@ -541,11 +541,10 @@ impl EditController for Buffer {
         let n_lines = 1 + end_line - start_line;
         self.carets.carets.resize_with(n_lines, Caret::new);
         for (idx, l) in (start_line..=end_line).enumerate() {
-            self.carets.plugin_position_set_and_validate(
+            self.carets.raw_plugin_position_set_and_validate(
                 idx,
                 Position::new(Cursor::new(l, current_col), Selection::new(l, start_col)),
                 &self.content,
-                &mut self.checkpoints,
             );
             self.carets.carets[idx].merge_sel_pos();
         }

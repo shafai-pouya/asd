@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Index, IndexMut};
+use libc::newlocale;
 
 pub enum MostlyOneVec<T> {
     Zero,
@@ -456,7 +457,6 @@ impl<T: Ord> MostlyOneVec<T> {
     }
 }
 
-#[allow(dead_code)]
 impl<T> MostlyOneVec<T> {
     pub(crate) fn resize_with(&mut self, new_len: usize, f: impl Fn() -> T) {
         let self_ = std::mem::replace(self, MostlyOneVec::Zero);

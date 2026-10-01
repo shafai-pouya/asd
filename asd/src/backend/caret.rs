@@ -190,7 +190,7 @@ impl Carets {
             );
         }
     }
-    /// This function commits by itself
+    /// This function commits and merges cursors by itself
     pub(crate) fn plugin_position_set_and_validate(
         &mut self,
         idx: usize,
@@ -199,6 +199,17 @@ impl Carets {
         checkpoints: &mut Checkpoints,
     ) {
         checkpoints.commit(self, content);
+        self.raw_plugin_position_set_and_validate(idx, value, content);
+        self.merge(checkpoints, content);
+    }
+
+    /// Raw means this function does not merge or commit
+    pub fn raw_plugin_position_set_and_validate(
+        &mut self,
+        idx: usize,
+        value: Position,
+        content: &Content,
+    ) {
         self.carets[idx].position = value;
         if self.carets[idx].position.selection.is_none() {
             self.carets[idx]
@@ -226,7 +237,6 @@ impl Carets {
                 .cursor
                 .validate_wide_chars_forwards(content);
         }
-        self.merge(checkpoints, content);
     }
 
     /// This function commits by itself
