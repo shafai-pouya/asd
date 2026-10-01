@@ -34,7 +34,21 @@ impl EditOperators for Buffer {
                         movec!(LittleString::from_spaces_repeated(diff)),
                     );
                 } // Safety: spaces work on all encodings
-                continue;
+            } else {
+                let max = self.carets.carets[i].get_position().get_max();
+                if line_len < max.1 {
+                    self.carets.carets[i].no_virtual_spaces(&self.content);
+                    unsafe {
+                        self.content.replace_text(
+                            &mut self.checkpoints,
+                            &mut CursorEditor {
+                                cursor: i,
+                                cursors: &mut self.carets,
+                            },
+                            movec!(),
+                        );
+                    } // Safety: We are not placing anything
+                }
             }
         }
     }
