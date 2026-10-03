@@ -7,11 +7,12 @@ use crate::backend::cursor::Cursor;
 use crate::backend::display_char::{CharStyle, CharValue};
 use crate::backend::display_string::DisplaySlice;
 use crate::backend::encoding::Encoding;
-use crate::backend::little_string::{LittleString, LittleStringUni};
+use crate::backend::little_string::LittleString;
 use crate::backend::selection::Selection;
 use crate::edit_operators::EditOperators;
 use crate::ui::log::{LOGS, Log};
 use crate::{Clipboard, movec};
+use compact_str::CompactString;
 use ratatui::layout::Rect;
 use std::io::Write;
 use unicode_segmentation::UnicodeSegmentation;
@@ -88,7 +89,7 @@ impl EditController for Buffer {
                             if g.next().is_some() {
                                 LittleString::from_one_cell_utf8_char_unchecked(ch)
                             } else {
-                                let lsu = LittleStringUni::new(&s.0);
+                                let lsu = CompactString::new(&s.0);
                                 let mut ls = LittleString::empty();
                                 ls.push(
                                     CharValue::from_lsu(lsu)

@@ -3,8 +3,9 @@ use crate::assets::colors::{
     apply_diagnostic_style,
 };
 use crate::backend::display_string::DisplayString;
-use crate::backend::little_string::LittleStringUni;
+use crate::backend::little_string::CheckVariableName;
 use crate::ui::log::{LOGS, Log};
+use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use ratatui::buffer::{Cell, CellDiffOption};
 use ratatui::prelude::Modifier;
@@ -13,8 +14,8 @@ use std::cmp::Ordering;
 use std::io::{Error, Write};
 use std::sync::Mutex;
 
-pub static LONG_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
-pub static EMOJI_LIST: Lazy<Mutex<Vec<LittleStringUni>>> = Lazy::new(|| Mutex::new(Vec::new()));
+pub static LONG_LIST: Lazy<Mutex<Vec<CompactString>>> = Lazy::new(|| Mutex::new(Vec::new()));
+pub static EMOJI_LIST: Lazy<Mutex<Vec<CompactString>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 #[cfg(test)]
 pub const PAD4: fn(&str) -> [u8; 4] = pad4;
@@ -298,7 +299,7 @@ impl CharValue {
                 string.push(Self(grapheme.chars().next().unwrap() as u32).build(style));
             }
         } else {
-            unsafe { string.push(Self::from_lsu(LittleStringUni::new(grapheme)).build(style)) }
+            unsafe { string.push(Self::from_lsu(CompactString::new(grapheme)).build(style)) }
         }
     }
 
@@ -308,7 +309,7 @@ impl CharValue {
             emoji_list_is_full()
         }
         let idx = lock.len() as u32 + 0x11_0000;
-        lock.push(LittleStringUni::new(grapheme)); // todo: I know it leaks memory. I may fix it later...
+        lock.push(CompactString::new(grapheme)); // todo: I know it leaks memory. I may fix it later...
         unsafe {
             string.push(Self(idx).emoji_to_dchar());
             string.push(Self::EMOJI_LAST.emoji_to_dchar());
@@ -340,7 +341,7 @@ impl CharValue {
         }
     }
 
-    pub fn from_lsu(lsu: LittleStringUni) -> Self {
+    pub fn from_lsu(lsu: CompactString) -> Self {
         let mut list_lock = LONG_LIST.lock().unwrap();
         let idx = list_lock.len() as u32;
         if idx > 0x000B_FFFF {
@@ -974,7 +975,7 @@ mod tests {
         let a = "آََََََََََ";
         assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
 
-        let cv = CharValue::from_lsu(LittleStringUni::new(a));
+        let cv = CharValue::from_lsu(CompactString::new(a));
 
         let mut cell1 = Cell::new(" ");
         cv.render_cell_content(&mut cell1, false, &mut emojis_to_render, random(), random());
@@ -1055,7 +1056,7 @@ mod tests {
         let a = "آََََََََََ";
         assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
         assert_eq!(
-            CharValue::from_lsu(LittleStringUni::new(a)).char_start_offset(),
+            CharValue::from_lsu(CompactString::new(a)).char_start_offset(),
             0
         );
 
@@ -1095,7 +1096,7 @@ mod tests {
         }
         // long:
         for c in ["a", "b", "آََََََََََ", "1", "_", "a"] {
-            assert!(CharValue::from_lsu(LittleStringUni::new(c)).is_variable_name())
+            assert!(CharValue::from_lsu(CompactString::new(c)).is_variable_name())
         }
         // ========= False cases ==========
         // char:
@@ -1104,7 +1105,7 @@ mod tests {
         }
         // long:
         for c in ["@ََََََ", "*"] {
-            assert!(!CharValue::from_lsu(LittleStringUni::new(c)).is_variable_name())
+            assert!(!CharValue::from_lsu(CompactString::new(c)).is_variable_name())
         }
         // emoji:
         let mut string = DisplayString::empty();
@@ -1181,9 +1182,9 @@ mod tests {
 
         // compare with long:
         for c in ["a", "b", "ا"] {
-            assert_ne!(CharValue::from_lsu(LittleStringUni::new(c)), '#');
+            assert_ne!(CharValue::from_lsu(CompactString::new(c)), '#');
             assert_ne!(
-                CharValue::from_lsu(LittleStringUni::new(c)),
+                CharValue::from_lsu(CompactString::new(c)),
                 c.chars().next().unwrap()
             ); // This is true. a long dchar SHOULD contain more than one character.
         }
@@ -1209,7 +1210,7 @@ mod tests {
 
             let a = "آََََََََََ";
             assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
-            dstring.push(CharValue::from_lsu(LittleStringUni::new(a)).build(CharStyle::NONE));
+            dstring.push(CharValue::from_lsu(CompactString::new(a)).build(CharStyle::NONE));
 
             dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
 
@@ -1253,7 +1254,7 @@ mod tests {
 
             let a = "آََََََََََ";
             assert_ne!(a.chars().count(), 1, "This string is not a long sequence");
-            dstring.push(CharValue::from_lsu(LittleStringUni::new(a)).build(CharStyle::NONE));
+            dstring.push(CharValue::from_lsu(CompactString::new(a)).build(CharStyle::NONE));
 
             dstring.push(CharValue::from_utf8_char_one_cell(' ').build(CharStyle::NONE));
 

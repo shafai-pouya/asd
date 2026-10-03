@@ -21,8 +21,6 @@ pub(crate) const DURATION_SMALL_TIMER: Duration = Duration::from_millis(500);
 /// The max time the user can wait between his/her first and second click to be counted as a double click
 pub const DOUBLE_CLICK_DURATION: Duration = Duration::from_millis(300);
 
-/// The max number of bytes for a [`crate::backend::little_string::LittleStringUni`] to be stored in stack
-pub const N_MAX_LITTLE_UNI: usize = 10;
 /// The max number of [`crate::backend::display_char::DisplayChar`]s for a [`crate::backend::little_string::LittleString`] to be stored in stack
 pub const N_MAX_LITTLE: usize = 10;
 

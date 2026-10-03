@@ -1,7 +1,8 @@
-use crate::assets::constants::{N_MAX_LITTLE, N_MAX_LITTLE_UNI};
+use crate::assets::constants::N_MAX_LITTLE;
 use crate::backend::display_char::{CharStyle, CharValue, DisplayChar};
 use crate::backend::display_string::{DisplaySlice, DisplayString};
 use crate::backend::encoding::Encoding;
+use compact_str::CompactString;
 use std::ops::Deref;
 use std::vec;
 
@@ -209,63 +210,16 @@ impl LittleString {
     }
 }
 
-#[derive(Clone)]
-pub enum LittleStringUni {
-    /// This SHOULD be a valid utf-8 slice:
-    Little((u8, [u8; N_MAX_LITTLE_UNI])),
-    Big(String),
+pub trait CheckVariableName {
+    fn is_variable_name(&self) -> bool;
 }
 
-impl LittleStringUni {
-    pub(crate) fn new(value: &str) -> Self {
-        if value.len() > N_MAX_LITTLE_UNI {
-            Self::Big(value.to_string())
-        } else {
-            let mut slice = [0; N_MAX_LITTLE_UNI];
-            slice[..value.len()].copy_from_slice(value.as_bytes());
-            Self::Little((value.len() as u8, slice))
-        }
-    }
-
-    pub(crate) fn is_variable_name(&self) -> bool {
+impl CheckVariableName for CompactString {
+    fn is_variable_name(&self) -> bool {
         self.deref()
             .chars()
             .next()
             .map(|ch| ch.is_alphanumeric() || ch == '_')
             .unwrap_or(false)
-    }
-}
-
-impl Deref for LittleStringUni {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            LittleStringUni::Little((len, data)) => str::from_utf8(&data[..*len as usize]).unwrap(),
-            LittleStringUni::Big(s) => s,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::backend::little_string::LittleStringUni;
-
-    #[test]
-    fn test_deref_lsu() {
-        assert_eq!(&*LittleStringUni::new(""), "");
-        assert_eq!(&*LittleStringUni::new("abcd"), "abcd");
-        let long = "This is a big string. Of course it is enough for tests according to N_MAX_LITTLE_UNI which is 10 now, but still making this long";
-        assert_eq!(&*LittleStringUni::new(long), long);
-    }
-
-    #[test]
-    fn test_is_variable_name_lsu() {
-        for i in ["a", "A", "_", "1", "0", "ا", "ب"] {
-            assert!(LittleStringUni::new(i).is_variable_name(), "{i}");
-        }
-        for i in ["!", "@", "*"] {
-            assert!(!LittleStringUni::new(i).is_variable_name(), "{i}");
-        }
     }
 }
