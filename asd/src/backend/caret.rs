@@ -2,12 +2,13 @@ use crate::backend::checkpoint::Checkpoints;
 use crate::backend::content::Content;
 use crate::backend::cursor::{Cursor, CursorCol};
 use crate::backend::little_string::LittleString;
-use crate::backend::mostly_one_vec::{IterMut, MostlyOneVec};
+use crate::backend::mostly_one_vec::MostlyOneVec;
 use crate::backend::selection::Selection;
 use crate::movec;
 use crate::ui::custom_scrollbar::CustomScrollbar;
 use ratatui::layout::Rect;
 use std::fmt::{Display, Formatter};
+use std::slice::IterMut;
 
 pub struct CursorEditor<'a> {
     pub cursor: usize,
@@ -44,7 +45,7 @@ impl<'a> CursorEditor<'a> {
 }
 
 pub struct Carets {
-    pub carets: MostlyOneVec<Caret>,
+    pub carets: Vec<Caret>,
 }
 impl Carets {
     pub(crate) fn any_selected(&self) -> bool {
@@ -54,7 +55,7 @@ impl Carets {
     }
     pub(crate) fn new() -> Self {
         Carets {
-            carets: movec![Caret::new()],
+            carets: vec![Caret::new()],
         }
     }
 
@@ -593,9 +594,7 @@ mod tests {
     use crate::backend::checkpoint::Checkpoints;
     use crate::backend::cursor::{Cursor, CursorCol};
     use crate::backend::encoding::Encoding;
-    use crate::backend::mostly_one_vec::MostlyOneVec;
     use crate::backend::selection::Selection;
-    use crate::movec;
     use crate::ui::custom_scrollbar::CustomScrollbar;
     use ratatui::layout::Rect;
     use rstest::rstest;
@@ -634,7 +633,7 @@ mod tests {
     #[test]
     fn iter() {
         let mut carets = Carets::new();
-        carets.carets = movec![
+        carets.carets = vec![
             Caret::new_from(Position::new(Cursor::new(1, 2), Selection::empty())),
             Caret::new_from(Position::new(Cursor::new(2, 3), Selection::new(2, 5))),
         ];
@@ -669,7 +668,7 @@ mod tests {
     #[test]
     fn any_selected() {
         let mut carets = Carets::new();
-        carets.carets = movec!(Caret::new(), Caret::new(), Caret::new());
+        carets.carets = vec![Caret::new(), Caret::new(), Caret::new()];
 
         assert!(!carets.any_selected());
 
@@ -688,7 +687,7 @@ mod tests {
 
     #[rstest]
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(5, 5),
             Selection::empty(),
@@ -698,7 +697,7 @@ mod tests {
             Selection::empty(),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(5, 5),
             Selection::empty(),
@@ -706,7 +705,7 @@ mod tests {
     ]
     )] // same cursor
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(5, 5),
             Selection::empty(),
@@ -716,7 +715,7 @@ mod tests {
             Selection::empty(),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(5, 5),
             Selection::empty(),
@@ -728,7 +727,7 @@ mod tests {
     ]
     )] // separate cursors
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 5),
             Selection::new(2, 10),
@@ -738,7 +737,7 @@ mod tests {
             Selection::new(2, 10),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 10),
             Selection::new(2, 5),
@@ -746,7 +745,7 @@ mod tests {
     ]
     )] // same selection
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 3),
             Selection::new(2, 8),
@@ -756,7 +755,7 @@ mod tests {
             Selection::new(2, 12),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 12),
             Selection::new(2, 3),
@@ -764,7 +763,7 @@ mod tests {
     ]
     )] // overlapping selections
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 3),
             Selection::new(2, 8),
@@ -774,7 +773,7 @@ mod tests {
             Selection::new(2, 12),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 12),
             Selection::new(2, 3),
@@ -782,7 +781,7 @@ mod tests {
     ]
     )] // touching selection boundaries
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 3),
             Selection::new(2, 8),
@@ -792,7 +791,7 @@ mod tests {
             Selection::empty(),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 8),
             Selection::new(2, 3),
@@ -800,7 +799,7 @@ mod tests {
     ]
     )] // cursor inside selection
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 3),
             Selection::empty(),
@@ -810,7 +809,7 @@ mod tests {
             Selection::new(2, 8),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 8),
             Selection::new(2, 3),
@@ -818,7 +817,7 @@ mod tests {
     ]
     )] // cursor at selection start
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 8),
             Selection::empty(),
@@ -828,7 +827,7 @@ mod tests {
             Selection::new(2, 8),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 8),
             Selection::new(2, 3),
@@ -836,7 +835,7 @@ mod tests {
     ]
     )] // cursor at selection end
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 1),
             Selection::new(2, 4),
@@ -850,7 +849,7 @@ mod tests {
             Selection::new(2, 10),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 10),
             Selection::new(2, 1),
@@ -858,7 +857,7 @@ mod tests {
     ]
     )] // chained overlapping selections
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 8),
             Selection::new(2, 12),
@@ -872,7 +871,7 @@ mod tests {
             Selection::new(2, 10),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 12),
             Selection::new(2, 2),
@@ -880,7 +879,7 @@ mod tests {
     ]
     )] // unordered overlapping selections
     #[case(
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 10),
             Selection::new(2, 3),
@@ -890,17 +889,14 @@ mod tests {
             Selection::new(2, 12),
         )),
     ],
-    movec![
+    vec![
         Caret::new_from(Position::new(
             Cursor::new(2, 12),
             Selection::new(2, 3),
         )),
     ]
     )] // reversed selection
-    fn test_merge_cursors(
-        #[case] carets_vec: MostlyOneVec<Caret>,
-        #[case] expected: MostlyOneVec<Caret>,
-    ) {
+    fn test_merge_cursors(#[case] carets_vec: Vec<Caret>, #[case] expected: Vec<Caret>) {
         let should_commit = carets_vec.len() != expected.len();
         let mut carets = Carets::new();
         carets.carets = carets_vec;
@@ -1049,7 +1045,7 @@ mod tests {
 
                 let c = Caret::new_from(pos);
                 let mut carets = Carets::new();
-                carets.carets = movec![c];
+                carets.carets = vec![c];
 
                 carets.plugin_position_set_and_validate(0, pos, &content, &mut checkpoints);
 
@@ -1102,14 +1098,14 @@ mod tests {
             ((10, 48), (9, 47), true),
             ((11, 2), (9, 2), false),
         ] {
-            carets.carets = movec![
+            carets.carets = vec![
                 Caret::new_from(Position::new(
                     Cursor::new(1234, 5678),
-                    Selection::new(1234, 5678)
+                    Selection::new(1234, 5678),
                 )),
                 Caret::new_from(Position::new(
                     Cursor::new(1222, 3444),
-                    Selection::new(5666, 7888)
+                    Selection::new(5666, 7888),
                 )),
             ];
             assert_ne!(carets.carets.len(), 1, "Test result maybe incorrect");
