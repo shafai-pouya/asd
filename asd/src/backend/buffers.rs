@@ -302,14 +302,6 @@ impl BuffersFileChangeGuard<'_> {
             self.insert(inode, Buffer::new_from_file(path));
         }
     }
-    pub fn open_custom(&mut self, showing_name: String, content: &str) {
-        let inode = Inode::new_virtual();
-        self.buffers.buffers.active_inode = inode;
-        self.buffers.buffers.inner.insert(
-            inode,
-            Buffer::new_utf8(PathBuf::from(READ_ONLY_PATH), showing_name, content),
-        );
-    }
     pub(crate) fn remove_self(&mut self) {
         let buffers: &mut Buffers = &mut self.buffers.buffers;
         let buffer = buffers.active_mut();

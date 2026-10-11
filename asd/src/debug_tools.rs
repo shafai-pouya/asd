@@ -1,15 +1,30 @@
 #[cfg(feature = "debug-tools")]
 pub mod inner {
-    use crate::App;
+    use crate::assets::colors::C_LOG_ERROR;
     use crate::backend::buffers::BuffersLock;
-    use crate::backend::caret::Carets;
+    use crate::backend::caret::{Carets, CursorEditor};
     use crate::backend::checkpoint::Checkpoints;
     use crate::backend::content::Content;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crate::backend::display_char::CharStyle;
+    use crate::backend::display_string::DisplayString;
+    use crate::backend::little_string::LittleString;
+    use crate::edit_operators::EditOperators;
+    use crate::ui::log::{LOGS, Log};
+    use crate::{App, movec};
+    use crossterm::event::{
+        DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyModifiers,
+    };
+    use crossterm::execute;
+    use crossterm::terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    };
     use once_cell::sync::Lazy;
-    use ratatui::Frame;
+    use ratatui::backend::Backend;
     use ratatui::buffer::Buffer;
     use ratatui::style::Color;
+    use ratatui::{Frame, Terminal};
+    use std::io;
+    use std::io::Write;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use unicode_segmentation::UnicodeSegmentation;
@@ -19,6 +34,7 @@ pub mod inner {
         commit_counts: AtomicUsize::new(0),
         real_commit_counts: AtomicUsize::new(0),
         last_commit_details: Lazy::new(|| Mutex::new(None)),
+        needs_full_redraw: AtomicBool::new(false),
     };
 
     pub struct DebugTools {
@@ -26,14 +42,93 @@ pub mod inner {
         commit_counts: AtomicUsize,
         real_commit_counts: AtomicUsize,
         last_commit_details: Lazy<Mutex<Option<String>>>,
+        needs_full_redraw: AtomicBool,
     }
 
     pub fn debug_key_events(event: KeyEvent) -> bool {
-        if event.modifiers == KeyModifiers::empty() && event.code == KeyCode::F(3) {
-            DEBUG_TOOLS.activated.fetch_not(Ordering::Relaxed);
-            true
+        if event.code == KeyCode::F(3) {
+            match event.modifiers {
+                KeyModifiers::NONE => {
+                    DEBUG_TOOLS.activated.fetch_not(Ordering::Relaxed);
+                    true
+                }
+                KeyModifiers::SHIFT => {
+                    prompt_command();
+                    true
+                }
+                _ => false,
+            }
         } else {
             false
+        }
+    }
+
+    pub fn prompt_command() {
+        let mut stdout = io::stdout();
+
+        execute!(stdout, LeaveAlternateScreen, DisableMouseCapture).unwrap();
+        disable_raw_mode().unwrap();
+
+        print!("Enter Command:");
+        stdout.flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        enable_raw_mode().unwrap();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+
+        DEBUG_TOOLS.needs_full_redraw.store(true, Ordering::Relaxed);
+
+        let input = input.trim_end_matches(['\r', '\n']);
+
+        'a: {
+            if let Some(rest) = input.strip_prefix('r')
+                && let Some((style, text)) = rest.split_once(':')
+                && let Ok(style) = style.parse()
+            {
+                if let Some(style) = CharStyle::from_debug_number(style) {
+                    replace_with_style(text, style);
+                } else {
+                    LOGS.push(Log {
+                        message: "Invalid Style".to_string(),
+                        color: C_LOG_ERROR,
+                        handler: None,
+                    })
+                }
+                break 'a;
+            }
+        }
+        LOGS.push(Log {
+            message: "Invalid command".to_string(),
+            color: C_LOG_ERROR,
+            handler: None,
+        });
+    }
+
+    pub fn replace_with_style(text: &str, style: CharStyle) {
+        let buffers = BuffersLock.get_debug_guard();
+        let mut buffers = buffers.lock();
+        let buffers = buffers.inner_mut();
+        let buffer = buffers.active_mut();
+        buffer.op_materialize_virtual_spaces();
+        for i in 0..buffer.carets.carets.len() {
+            unsafe {
+                buffer.content.replace_text(
+                    &mut buffer.checkpoints,
+                    &mut CursorEditor {
+                        cursor: i,
+                        cursors: &mut buffer.carets,
+                    },
+                    movec!(LittleString::Big(DisplayString::from_str_utf8(text, style))),
+                );
+            }
+        }
+    }
+
+    pub fn debug_tools_event_loop<B: Backend>(terminal: &mut Terminal<B>) {
+        if DEBUG_TOOLS.needs_full_redraw.swap(false, Ordering::Relaxed) {
+            terminal.clear().unwrap();
         }
     }
 
@@ -141,7 +236,8 @@ pub mod inner {
     use crate::backend::checkpoint::Checkpoints;
     use crate::backend::content::Content;
     use crossterm::event::KeyEvent;
-    use ratatui::Frame;
+    use ratatui::backend::Backend;
+    use ratatui::{Frame, Terminal};
 
     #[inline(always)]
     pub fn debug_key_events(_: KeyEvent) -> bool {
@@ -156,4 +252,7 @@ pub mod inner {
 
     #[inline(always)]
     pub fn debug_push_commit() {}
+
+    #[inline(always)]
+    pub fn debug_tools_event_loop<B: Backend>(_: &mut Terminal<B>) {}
 }

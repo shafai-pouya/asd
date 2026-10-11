@@ -14,7 +14,7 @@ use crate::backend::little_string::LittleString;
 use crate::backend::modes::Mode;
 use crate::backend::modes::editor_mode::EditorMode;
 use crate::backend::mostly_one_vec::MostlyOneVec;
-use crate::debug_tools::inner::debug_render;
+use crate::debug_tools::inner::{debug_render, debug_tools_event_loop};
 use crate::ui::base::render_base;
 use crate::ui::cursor::TerminalCursor;
 use crate::ui::log::{LOGS, Log};
@@ -23,12 +23,12 @@ use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, MouseButton, MouseEventKind,
 };
 use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 use ratatui::layout::Position;
 use ratatui::{DefaultTerminal, Frame, layout::Rect};
 use std::env::args;
 #[cfg(debug_assertions)]
 use std::fs::OpenOptions;
+#[cfg(debug_assertions)]
 use std::io::Write;
 #[cfg(debug_assertions)]
 use std::os::fd::AsRawFd;
@@ -120,25 +120,6 @@ impl App {
             internal_clipboard: (Encoding::Raw, movec![]),
         }
     }
-    #[inline]
-    fn custom(showing_name: String, content: &str) -> Self {
-        BuffersLock
-            .get_file_change_guard()
-            .lock()
-            .open_custom(showing_name, content);
-        Self {
-            exit: false,
-            next_is_separator_event: false,
-            file_tree: None,
-            terminal_cursor: TerminalCursor::new(),
-            last_content_rect: Rect::default(),
-            last_tree_rect: Rect::default(),
-            last_tree_and_content_separator_rect: Rect::default(),
-            double_click_details: (u16::MAX, u16::MAX, Instant::now()),
-            change_mode: None,
-            internal_clipboard: (Encoding::Raw, movec![]),
-        }
-    }
     fn help() -> Self {
         BuffersLock.get_file_change_guard().lock().open_help();
         Self {
@@ -163,6 +144,7 @@ impl App {
             self.draw(terminal, mode);
             self.handle_events(mode);
             BuffersLock.handle_checkpoint_timers();
+            debug_tools_event_loop(terminal);
         }
     }
 
@@ -310,17 +292,15 @@ fn main() {
     let old_hook = std::panic::take_hook();
 
     std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = execute!(std::io::stdout(), DisableMouseCapture,);
+        let _ = execute!(std::io::stdout(), DisableMouseCapture);
 
         old_hook(panic_info);
     }));
 
     // init
     let mut terminal = ratatui::init();
-    enable_raw_mode().unwrap(); // you can panic here
     execute!(
         std::io::stdout(),
-        EnterAlternateScreen,
         EnableMouseCapture,
         SetCursorStyle::BlinkingUnderScore,
     )
@@ -331,7 +311,7 @@ fn main() {
     app.run(&mut terminal, &mut mode);
 
     // end
-    execute!(std::io::stdout(), DisableMouseCapture,).unwrap(); // Usually ok, but you can panic here;
+    let _ = execute!(std::io::stdout(), DisableMouseCapture); // Don't need to handle the error
     ratatui::restore();
 }
 

@@ -1,10 +1,8 @@
 use crate::assets::colors::{
-    C_BG_SPECIAL_BYTES, C_LOG_ERROR, apply_base_style, apply_deprecated_state,
-    apply_diagnostic_style,
+    C_BG_SPECIAL_BYTES, apply_base_style, apply_deprecated_state, apply_diagnostic_style,
 };
 use crate::backend::display_string::DisplayString;
 use crate::backend::little_string::CheckVariableName;
-use crate::ui::log::{LOGS, Log};
 use compact_str::CompactString;
 use once_cell::sync::Lazy;
 use ratatui::buffer::{Cell, CellDiffOption};
@@ -214,6 +212,14 @@ impl CharStyle {
         cell.set_style(apply_base_style(self.into()));
         cell.set_style(apply_diagnostic_style(self.into()));
         cell.set_style(apply_deprecated_state(self.into()));
+    }
+
+    #[cfg(feature = "debug-tools")]
+    pub fn from_debug_number(n: u32) -> Option<Self> {
+        if n & 0x001F_FFFF != 0 {
+            return None;
+        }
+        Some(Self(n))
     }
 }
 
@@ -623,9 +629,9 @@ impl DisplayChar {
     ) {
         #[cfg(debug_assertions)]
         if buf.cell((x, y)).is_none() {
-            LOGS.push(Log {
+            crate::ui::log::LOGS.push(crate::ui::log::Log {
                 message: format!("BUG!! Please contact us. This is a bug about rendering the ui. The position does not exist. file {}, line {}", file!(), line!()),
-                color: C_LOG_ERROR,
+                color: crate::assets::colors::C_LOG_ERROR,
                 handler: None,
             });
             return;

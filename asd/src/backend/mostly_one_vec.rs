@@ -448,44 +448,6 @@ impl<T> MostlyOneVec<T> {
         }
     }
 }
-impl<T: Ord> MostlyOneVec<T> {
-    pub(crate) fn sort(&mut self) {
-        if let Self::More(v) = self {
-            v.sort();
-        }
-    }
-}
-
-impl<T> MostlyOneVec<T> {
-    pub(crate) fn resize_with(&mut self, new_len: usize, f: impl Fn() -> T) {
-        let self_ = std::mem::replace(self, MostlyOneVec::Zero);
-        match self_ {
-            MostlyOneVec::Zero => {
-                let mut v = Vec::with_capacity(new_len);
-                while v.len() < new_len {
-                    v.push(f());
-                }
-                *self = MostlyOneVec::More(v);
-            }
-            MostlyOneVec::One(i) => match new_len.cmp(&1) {
-                Ordering::Less => {}
-                Ordering::Equal => *self = MostlyOneVec::One(i),
-                Ordering::Greater => {
-                    let mut v = Vec::with_capacity(new_len);
-                    v.push(i);
-                    while v.len() < new_len {
-                        v.push(f());
-                    }
-                    *self = MostlyOneVec::More(v);
-                }
-            },
-            MostlyOneVec::More(mut v) => {
-                v.resize_with(new_len, f);
-                *self = MostlyOneVec::More(v);
-            }
-        }
-    }
-}
 
 impl<T: Clone> Clone for MostlyOneVec<T> {
     fn clone(&self) -> Self {
@@ -669,31 +631,6 @@ mod tests {
         movec.truncate(index);
         assert_eq!(movec, result);
     }
-    #[rstest]
-    #[case(movec![], 0, movec![])]
-    #[case(movec![], 1, movec![88])]
-    #[case(movec![], 2, movec![88, 88])]
-    #[case(movec![], 3, movec![88, 88, 88])]
-    #[case(movec![1], 0, movec![])]
-    #[case(movec![1], 1, movec![1])]
-    #[case(movec![1], 2, movec![1, 88])]
-    #[case(movec![1], 3, movec![1, 88, 88])]
-    #[case(movec![1, 2], 2, movec![1, 2])]
-    #[case(movec![1, 2], 1, movec![1])]
-    #[case(movec![1, 2], 0, movec![])]
-    #[case(movec![1, 2], 3, movec![1, 2, 88])]
-    #[case(movec![1, 2, 3, 4, 5], 0, movec![])]
-    #[case(movec![1, 2, 3, 4, 5], 1, movec![1])]
-    #[case(movec![1, 2, 3, 4, 5], 2, movec![1, 2])]
-    #[case(movec![1, 2, 3, 4, 5], 6, movec![1, 2, 3, 4, 5, 88])]
-    fn resize_with(
-        #[case] mut movec: MostlyOneVec<usize>,
-        #[case] new_len: usize,
-        #[case] result: MostlyOneVec<usize>,
-    ) {
-        movec.resize_with(new_len, || 88);
-        assert_eq!(movec, result);
-    }
 
     #[rstest]
     #[case(movec!(), 0, movec!(88))]
@@ -853,11 +790,6 @@ mod tests {
     #[case(movec!(1), movec!(1))]
     #[case(movec!(5, 8, 3, 7, 4), movec!(3, 4, 5, 7, 8))]
     fn sort(#[case] mut movec: MostlyOneVec<usize>, #[case] expected: MostlyOneVec<usize>) {
-        {
-            let mut movec = movec.clone();
-            movec.sort();
-            assert_eq!(movec, expected);
-        }
         movec.sort_by(|a, b| a.cmp(b));
         assert_eq!(movec, expected);
     }
